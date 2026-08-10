@@ -163,7 +163,7 @@
 
   .review-note{
     font-size:11px; color:var(--orange); background:#2a1608; border:1px solid var(--orange-dim);
-    border-radius:8px; padding:8px 10px; margin-top:8px; display:none;
+    border-radius:8px; padding:8px 10px; margin-top:8px; display:none; white-space:pre-wrap;
   }
   .review-note.show{ display:block; }
 
@@ -263,8 +263,8 @@
 
   <div id="grid"></div>
 
-  <button class="log-toggle" id="logToggle">Show voice log ▾</button>
-  <div id="logPanel"></div>
+  <button class="log-toggle" id="logToggle">Hide voice log ▴</button>
+  <div id="logPanel" class="open"></div>
   <button class="log-toggle" id="historyToggle">Show saved sheets ▾</button>
   <div id="historyPanel" style="display:none;"></div>
   <div class="hint">Say numbers naturally. If multiple jobs are mixed, say the job code (e.g. "TQC") before its numbers — it'll stick until you say a different one. Say "status" for a count out loud, or "undo [number]" to un-mark. Keep this tab active — the mic pauses if the screen locks or you switch apps.</div>
@@ -275,6 +275,7 @@
 <script>
 const STORAGE_KEY = 'cartonChecker_v1';
 const HISTORY_KEY = 'cartonChecker_history_v1';
+const LOG_OPEN_KEY = 'cartonChecker_logOpen_v1';
 
 let state = {
   items: [],       // list of {num, single}
@@ -310,16 +311,18 @@ function parseManifest(text) {
   let currentJob = '';
   const items = [];
   tokens.forEach(t => {
-    // a standalone 2-4 letter token (no digits) sets the job context for
-    // everything that follows, e.g. "TQC 4012 4013 DLL 2001"
-    if (/^[A-Za-z]{2,4}$/.test(t)) {
+    const single = t.endsWith('*');
+    const bare = single ? t.slice(0, -1) : t;
+    if (bare.length === 0) return;
+    // job codes can mix letters and digits in any order (e.g. "TQC", "14Q",
+    // "ZZT", "DLL3TF") — the one thing that always marks a carton number
+    // instead is being pure digits. Anything with a letter in it sets the
+    // job context for everything that follows, e.g. "TQC 4012 4013 DLL 2001".
+    if (!/^\d+$/.test(bare) && bare.length <= 10) {
       currentJob = t.toUpperCase();
       return;
     }
-    const single = t.endsWith('*');
-    const num = single ? t.slice(0, -1) : t;
-    if (num.length === 0) return;
-    items.push({ job: currentJob, num, single, key: currentJob + '|' + num });
+    items.push({ job: currentJob, num: bare, single, key: currentJob + '|' + bare });
   });
   return items;
 }
@@ -597,6 +600,20 @@ function wordsToMagnitudeNumbers(tokens) {
   return results;
 }
 
+// Turns a spoken sentence into one compressed letter/digit string for job-code
+// matching — e.g. "now we have job TF four" -> "...jobtf4" — so a code like
+// "TF4" matches whether the speech recognizer transcribes the four as text or
+// as a numeral, and even when it's buried mid-sentence with filler words.
+function normalizeForJobMatch(text) {
+  const tokens = text.toLowerCase().match(/[a-z0-9']+/g) || [];
+  return tokens.map(tok => {
+    if (/^\d+$/.test(tok)) return tok;
+    if (tok in WORD_DIGITS) return WORD_DIGITS[tok];
+    if (tok in TEEN_TENS) return TEEN_TENS[tok];
+    return tok.replace(/[^a-z0-9]/g, '');
+  }).join('');
+}
+
 function extractCandidates(text) {
   const noCommas = text.replace(/,/g, '');
   const lower = noCommas.toLowerCase();
@@ -677,9 +694,12 @@ function handleUtterance(text) {
     return;
   }
 
-  // detect a spoken job code (e.g. "TQC") among the manifest's known job codes
+  // detect a spoken job code (e.g. "TQC", or "TF4" said as "TF four") among
+  // the manifest's known job codes — matched against a version of the whole
+  // utterance with spoken digits folded in, so codes with numbers in them
+  // still match however the recognizer transcribed the digit.
   const knownJobs = [...new Set(state.items.map(i => i.job).filter(Boolean))];
-  const compressed = lower.replace(/[^a-z]/g, '');
+  const compressed = normalizeForJobMatch(text);
   let spokenJob = null;
   knownJobs.forEach(j => {
     if (compressed.includes(j.toLowerCase())) spokenJob = j;
@@ -838,9 +858,29 @@ async function handlePhotoFile(e) {
       return;
     }
     const added = mergeNumbersIntoTextarea(unique);
+
+    // Job/VLI codes are letters, so they never match the digit regex above and
+    // would otherwise be silently dropped. Detect likely candidates — any
+    // short token that mixes letters and digits (or is pure letters) — and
+    // flag them instead of guessing where they belong. OCR reading order
+    // doesn't reliably preserve which numbers go with which code in a column
+    // layout, so this stays a manual add. Codes can be things like "TQC",
+    // "14Q", "ZZT", "DLL3TF" — any letter/digit combination — so the only
+    // thing that rules a token OUT is being pure digits (a carton number).
+    const jobStoplist = new Set(['DEL','QTY','PCS','ITEM','DESC','ROOM','DATE','SHIP',
+      'PAGE','TOTAL','CARTON','CARTONS','DELIVERY','VLI','CODE','SEAL','BOL','FROM','TO',
+      'PO','NO','REF','LOT','SKU','QTR','FMG','INC','LLC','CO']);
+    const jobCandidates = [...new Set((gridText.match(/\b[A-Z0-9]{2,8}\b/g) || [])
+      .filter(w => /[A-Z]/.test(w) && !/^\d+$/.test(w) && !jobStoplist.has(w)))];
+
     document.getElementById('reviewNote').classList.add('show');
-    document.getElementById('reviewNote').textContent =
-      'Found ' + unique.length + ' numbers, ' + added.length + ' new — check against the sheet before loading. Snap another photo to add more.';
+    let note = 'Found ' + unique.length + ' numbers, ' + added.length + ' new — check against the sheet before loading. Snap another photo to add more.';
+    if (jobCandidates.length) {
+      note += '\n\nPossible job codes spotted: ' + jobCandidates.join(', ') +
+        ' — if this manifest has multiple jobs mixed together, type the code right before its numbers ' +
+        '(e.g. "' + jobCandidates[0] + ' 4012 4013") so they group correctly. I can\'t place these for you reliably from a photo.';
+    }
+    document.getElementById('reviewNote').textContent = note;
   } catch(err) {
     setOverlay(false);
     alert('Scan failed: ' + err.message + '. You can still type numbers in manually.');
@@ -942,8 +982,9 @@ document.getElementById('historyToggle').addEventListener('click', () => {
 document.getElementById('logToggle').addEventListener('click', () => {
   const panel = document.getElementById('logPanel');
   panel.classList.toggle('open');
-  document.getElementById('logToggle').textContent = panel.classList.contains('open')
-    ? 'Hide voice log ▴' : 'Show voice log ▾';
+  const isOpen = panel.classList.contains('open');
+  document.getElementById('logToggle').textContent = isOpen ? 'Hide voice log ▴' : 'Show voice log ▾';
+  localStorage.setItem(LOG_OPEN_KEY, isOpen ? 'true' : 'false');
 });
 
 function itemsToText(items) {
@@ -958,6 +999,10 @@ function itemsToText(items) {
 
 // init
 load();
+if (localStorage.getItem(LOG_OPEN_KEY) === 'false') {
+  document.getElementById('logPanel').classList.remove('open');
+  document.getElementById('logToggle').textContent = 'Show voice log ▾';
+}
 if (state.items.length) {
   state.numLength = computeNumLength(state.items);
   document.getElementById('manifestInput').value = itemsToText(state.items);
