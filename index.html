@@ -272,6 +272,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sam-js@0.3.1/dist/samjs.min.js"></script>
 <script>
 const STORAGE_KEY = 'cartonChecker_v1';
 const HISTORY_KEY = 'cartonChecker_history_v1';
@@ -792,7 +793,23 @@ function findTarget(num, job) {
   return 'AMBIGUOUS';
 }
 
+// Bundled S.A.M. (Software Automatic Mouth) voice synthesizer — gives every
+// device the exact same ~21KB, fully offline, always-available voice instead
+// of depending on whatever TTS engine (or lack of one) happens to be
+// installed on the phone. Falls back to the browser's native voice if the
+// CDN script didn't load (e.g. no signal on first visit before it's cached).
+let samVoice = null;
+try {
+  if (typeof SamJs !== 'undefined') samVoice = new SamJs();
+} catch(e) { samVoice = null; }
+
 function speak(text) {
+  if (samVoice) {
+    try {
+      samVoice.speak(text);
+      return;
+    } catch(e) { /* fall through to native voice below */ }
+  }
   try {
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1.05;
