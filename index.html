@@ -267,7 +267,7 @@
   <div id="logPanel" class="open"></div>
   <button class="log-toggle" id="historyToggle">Show saved sheets ▾</button>
   <div id="historyPanel" style="display:none;"></div>
-  <div class="hint">Say numbers naturally. If multiple jobs are mixed, say the job code (e.g. "TQC") before its numbers — it'll stick until you say a different one. Say "status" for a count out loud, or "undo [number]" to un-mark. Keep this tab active — the mic pauses if the screen locks or you switch apps.</div>
+  <div class="hint">Say numbers naturally. If multiple jobs are mixed, say the job code (e.g. "TQC") before its numbers — it'll stick until you say a different one. Say "status" for a count out loud, "what's left" to hear the actual missing numbers (once there's 10 or fewer), or "undo [number]" to un-mark. Keep this tab active — the mic pauses if the screen locks or you switch apps.</div>
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
@@ -686,18 +686,11 @@ function handleUtterance(text) {
   const lower = text.toLowerCase();
   logLine('heard: "' + text + '"');
 
-  if (lower.includes('status')) {
-    const total = state.items.length;
-    const markedN = state.items.filter(i => state.marked[i.key]).length;
-    logLine('STATUS: ' + markedN + ' marked, ' + (total-markedN) + ' remaining', 'hit');
-    speak(markedN + ' marked, ' + (total-markedN) + ' remaining');
-    return;
-  }
-
   // detect a spoken job code (e.g. "TQC", or "TF4" said as "TF four") among
   // the manifest's known job codes — matched against a version of the whole
   // utterance with spoken digits folded in, so codes with numbers in them
-  // still match however the recognizer transcribed the digit.
+  // still match however the recognizer transcribed the digit. Resolved
+  // first so "status" / "missing" queries can be scoped to the active job too.
   const knownJobs = [...new Set(state.items.map(i => i.job).filter(Boolean))];
   const compressed = normalizeForJobMatch(text);
   let spokenJob = null;
@@ -709,6 +702,39 @@ function handleUtterance(text) {
     state.lastFullNumber = null; // don't carry a prefix across job contexts
   }
   const effectiveJob = spokenJob || state.lastJob || '';
+  const multiJob = knownJobs.length > 1;
+  const scopeItems = (multiJob && effectiveJob) ? state.items.filter(i => i.job === effectiveJob) : state.items;
+  const scopeLabel = (multiJob && effectiveJob) ? effectiveJob + ': ' : '';
+
+  if (lower.includes('status')) {
+    const total = scopeItems.length;
+    const markedN = scopeItems.filter(i => state.marked[i.key]).length;
+    logLine('STATUS ' + scopeLabel + markedN + ' marked, ' + (total-markedN) + ' remaining', 'hit');
+    speak(scopeLabel + markedN + ' marked, ' + (total-markedN) + ' remaining');
+    return;
+  }
+
+  // "missing" / "what's left" reads back the actual numbers still unmarked —
+  // meant for the tail end of a truck when there's only a handful left, so it
+  // stays capped at 10: past that it's faster to just glance at the screen
+  // than to stand there listening to a long list get read out.
+  if (lower.includes('missing') || lower.includes("what's left") || lower.includes('whats left') || lower.includes('what is left')) {
+    const missingItems = scopeItems.filter(i => !state.marked[i.key]);
+    const n = missingItems.length;
+    if (n === 0) {
+      logLine('MISSING ' + scopeLabel + 'none — all marked', 'hit');
+      speak(scopeLabel + 'all marked, nothing missing');
+    } else if (n > 10) {
+      logLine('MISSING ' + scopeLabel + n + ' remaining — too many to read out', 'hit');
+      speak(scopeLabel + n + ' remaining, too many to read out');
+    } else {
+      const numberList = missingItems.map(i => i.num).join(', ');
+      const spokenList = missingItems.map(i => i.num.split('').join(' ')).join(', ');
+      logLine('MISSING ' + scopeLabel + numberList, 'hit');
+      speak(scopeLabel + n + ' remaining: ' + spokenList);
+    }
+    return;
+  }
 
   const undoMatch = lower.match(/undo\s+(.+)/);
   const candidates = extractCandidates(undoMatch ? undoMatch[1] : text);
