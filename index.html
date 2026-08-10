@@ -90,7 +90,7 @@
     border:1px solid #2c3339; border-radius:8px; padding:10px; font-family:var(--mono);
     font-size:13px; resize:vertical;
   }
-  .setup-actions{ display:flex; gap:8px; margin-top:10px; }
+  .setup-actions{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
   .btn{
     border:none; border-radius:9px; padding:10px 14px; font-weight:700; font-size:13px;
     background:var(--panel-2); color:var(--text); border:1px solid #2c3339;
@@ -252,10 +252,13 @@
     <textarea id="manifestInput" placeholder="Paste carton numbers — spaces, commas, or new lines. For multiple jobs on one truck, put the 3-letter job code before its numbers: TQC 4012 4013 4014  DLL 2001. Mark a single/split-off box with *, e.g. 2001*"></textarea>
     <div class="setup-actions">
       <button class="btn primary" id="loadBtn">Load list</button>
-      <button class="btn ghost" id="editBtn" style="display:none;">Edit list</button>
-      <button class="btn ghost" id="resetBtn">Reset progress</button>
-      <button class="btn ghost" id="clearAllBtn" style="color:var(--red); border-color:#5c2420;">New manifest</button>
     </div>
+  </div>
+
+  <div class="setup-actions" id="loadedActions" style="display:none; margin-bottom:14px;">
+    <button class="btn ghost" id="editBtn">Edit list</button>
+    <button class="btn ghost" id="resetBtn">Reset progress</button>
+    <button class="btn ghost" id="clearAllBtn" style="color:var(--red); border-color:#5c2420;">New manifest</button>
   </div>
 
   <div id="grid"></div>
@@ -861,7 +864,7 @@ document.getElementById('loadBtn').addEventListener('click', () => {
   save();
   renderGrid();
   document.getElementById('setupPanel').style.display = 'none';
-  document.getElementById('editBtn').style.display = 'inline-block';
+  document.getElementById('loadedActions').style.display = 'flex';
 });
 
 document.getElementById('editBtn').addEventListener('click', () => {
@@ -922,7 +925,7 @@ function startFreshManifest() {
   document.getElementById('manifestInput').value = '';
   document.getElementById('grid').innerHTML = '';
   document.getElementById('setupPanel').style.display = 'block';
-  document.getElementById('editBtn').style.display = 'none';
+  document.getElementById('loadedActions').style.display = 'none';
   updateStats();
   stopListening();
   renderHistory();
@@ -959,7 +962,7 @@ if (state.items.length) {
   state.numLength = computeNumLength(state.items);
   document.getElementById('manifestInput').value = itemsToText(state.items);
   document.getElementById('setupPanel').style.display = 'none';
-  document.getElementById('editBtn').style.display = 'inline-block';
+  document.getElementById('loadedActions').style.display = 'flex';
   renderGrid();
 }
 </script>
