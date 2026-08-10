@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Carton Checker</title>
+<style>
+  :root{
+    --bg:#14171a;
+    --panel:#1d2226;
+    --panel-2:#242a2f;
+    --orange:#ff6a13;
+    --orange-dim:#a8480c;
+    --green:#33c46a;
+    --green-dim:#173b26;
+    --red:#e0453a;
+    --text:#edeef0;
+    --muted:#8b949a;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    min-height:100vh; padding-bottom:24px;
+  }
+  header{
+    position:sticky; top:0; z-index:10;
+    background:var(--panel); border-bottom:2px solid var(--orange-dim);
+    padding:12px 14px 10px;
+  }
+  .title{
+    display:flex; align-items:baseline; justify-content:space-between;
+  }
+  .title h1{
+    font-size:15px; letter-spacing:.14em; text-transform:uppercase;
+    margin:0; color:var(--orange); font-weight:800;
+  }
+  .title .job-id{ font-family:var(--mono); font-size:11px; color:var(--muted); }
+
+  .stats{
+    display:flex; gap:10px; margin-top:10px;
+  }
+  .stat{
+    flex:1; background:var(--panel-2); border-radius:10px; padding:8px 10px;
+    text-align:center; border:1px solid #2c3339;
+  }
+  .stat .n{ font-size:22px; font-weight:800; font-family:var(--mono); line-height:1; }
+  .stat .l{ font-size:9px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; margin-top:3px;}
+  .stat.marked .n{ color:var(--green); }
+  .stat.remaining .n{ color:var(--orange); }
+
+  .mic-row{
+    display:flex; align-items:center; gap:12px; margin-top:12px;
+  }
+  #micBtn{
+    flex:1; border:none; border-radius:14px; padding:14px 10px;
+    font-size:15px; font-weight:800; letter-spacing:.05em;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    background:var(--panel-2); color:var(--muted); border:2px solid #2c3339;
+  }
+  #micBtn.live{
+    background:linear-gradient(180deg,#2a1608,#1d2226);
+    color:var(--orange); border-color:var(--orange);
+  }
+  .dot{
+    width:11px; height:11px; border-radius:50%;
+    background:var(--muted);
+  }
+  #micBtn.live .dot{
+    background:var(--orange);
+    box-shadow:0 0 0 0 rgba(255,106,19,.6);
+    animation:pulse 1.4s infinite;
+  }
+  @keyframes pulse{
+    0%{ box-shadow:0 0 0 0 rgba(255,106,19,.55); }
+    70%{ box-shadow:0 0 0 14px rgba(255,106,19,0); }
+    100%{ box-shadow:0 0 0 0 rgba(255,106,19,0); }
+  }
+
+  main{ padding:14px; }
+
+  .setup{
+    background:var(--panel); border:1px solid #2c3339; border-radius:12px;
+    padding:14px; margin-bottom:14px;
+  }
+  .setup h2{ font-size:12px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); margin:0 0 8px; }
+  textarea{
+    width:100%; min-height:90px; background:var(--bg); color:var(--text);
+    border:1px solid #2c3339; border-radius:8px; padding:10px; font-family:var(--mono);
+    font-size:13px; resize:vertical;
+  }
+  .setup-actions{ display:flex; gap:8px; margin-top:10px; }
+  .btn{
+    border:none; border-radius:9px; padding:10px 14px; font-weight:700; font-size:13px;
+    background:var(--panel-2); color:var(--text); border:1px solid #2c3339;
+  }
+  .btn.primary{ background:var(--orange); color:#1a1000; }
+  .btn.ghost{ background:transparent; color:var(--muted); }
+
+  .grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(64px,1fr));
+    gap:6px;
+  }
+  .chip{
+    padding:10px 2px; text-align:center; border-radius:8px;
+    font-family:var(--mono); font-size:14px; font-weight:700;
+    background:var(--panel-2); color:var(--text); border:1px solid #2c3339;
+    user-select:none;
+  }
+  .chip.marked{
+    background:var(--green-dim); color:var(--green); border-color:var(--green);
+    text-decoration:line-through; text-decoration-color:rgba(51,196,106,.6);
+  }
+  .chip.single{
+    outline:2px dashed var(--orange); outline-offset:-2px;
+  }
+
+  .job-header{
+    font-family:var(--mono); font-size:12px; font-weight:800; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--orange); margin:16px 0 6px; padding-bottom:4px;
+    border-bottom:1px solid var(--orange-dim);
+  }
+  .job-header:first-child{ margin-top:0; }
+
+  .log-toggle{
+    width:100%; margin-top:14px; background:none; border:none; color:var(--muted);
+    font-size:12px; padding:8px; text-align:center; letter-spacing:.08em; text-transform:uppercase;
+  }
+  #logPanel{
+    display:none; background:#0f1214; border:1px solid #2c3339; border-radius:10px;
+    padding:10px; margin-top:6px; max-height:180px; overflow-y:auto;
+    font-family:var(--mono); font-size:12px; color:var(--muted); line-height:1.6;
+  }
+  #logPanel.open{ display:block; }
+  .log-line.hit{ color:var(--green); }
+  .log-line.miss{ color:var(--red); }
+
+  .hint{ font-size:11px; color:var(--muted); text-align:center; margin-top:10px; }
+
+  .scan-btn{
+    flex:1; margin-bottom:10px; background:var(--panel-2); color:var(--orange);
+    border:2px dashed var(--orange-dim); border-radius:10px; padding:14px 6px;
+    font-weight:800; font-size:13px; letter-spacing:.02em;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .scan-btn:active{ background:#2a1608; }
+
+  #ocrOverlay{
+    display:none; position:fixed; inset:0; background:rgba(10,12,13,.92);
+    z-index:50; align-items:center; justify-content:center; flex-direction:column; gap:14px;
+  }
+  #ocrOverlay.open{ display:flex; }
+  .spinner{
+    width:46px; height:46px; border-radius:50%;
+    border:4px solid #2c3339; border-top-color:var(--orange);
+    animation:spin 0.9s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  #ocrStatus{ color:var(--text); font-size:13px; font-family:var(--mono); }
+  #ocrProgressWrap{ width:70%; height:6px; background:#2c3339; border-radius:4px; overflow:hidden; }
+  #ocrProgressBar{ height:100%; width:0%; background:var(--orange); }
+
+  .review-note{
+    font-size:11px; color:var(--orange); background:#2a1608; border:1px solid var(--orange-dim);
+    border-radius:8px; padding:8px 10px; margin-top:8px; display:none;
+  }
+  .review-note.show{ display:block; }
+
+  #archiveOverlay{
+    display:none; position:fixed; inset:0; background:rgba(10,12,13,.92);
+    z-index:60; align-items:center; justify-content:center; padding:20px;
+  }
+  #archiveOverlay.open{ display:flex; }
+  .archive-card{
+    background:var(--panel); border:1px solid #2c3339; border-radius:14px;
+    padding:20px; max-width:360px; width:100%;
+  }
+  .archive-card h3{ margin:0 0 4px; font-size:16px; color:var(--text); }
+  .archive-card .sub{ font-size:12px; color:var(--muted); margin-bottom:16px; }
+  .archive-card .status{ font-size:13px; font-weight:800; margin-bottom:16px; padding:8px 10px; border-radius:8px; }
+  .archive-card .status.complete{ background:var(--green-dim); color:var(--green); }
+  .archive-card .status.incomplete{ background:#3a1a14; color:var(--red); }
+  .archive-btn{
+    width:100%; border:none; border-radius:10px; padding:13px; margin-bottom:8px;
+    font-weight:800; font-size:14px; display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .archive-btn.pdf{ background:var(--orange); color:#1a1000; }
+  .archive-btn.email{ background:var(--panel-2); color:var(--text); border:1px solid #2c3339; }
+  .archive-btn.discard{ background:transparent; color:var(--red); }
+  .archive-btn.cancel{ background:transparent; color:var(--muted); }
+
+  .history-item{
+    background:var(--panel-2); border:1px solid #2c3339; border-radius:10px;
+    padding:10px; margin-bottom:8px;
+  }
+  .history-item .meta{ font-size:11px; color:var(--muted); margin-bottom:4px; }
+  .history-item .status{ font-size:12px; font-weight:800; margin-bottom:8px; }
+  .history-item .status.complete{ color:var(--green); }
+  .history-item .status.incomplete{ color:var(--red); }
+  .history-actions{ display:flex; gap:6px; }
+  .history-actions button{
+    flex:1; font-size:11px; padding:7px; border-radius:7px; border:1px solid #2c3339;
+    background:var(--bg); color:var(--text); font-weight:700;
+  }
+</style>
+</head>
+<body>
+
+<div id="ocrOverlay">
+  <div class="spinner"></div>
+  <div id="ocrStatus">reading photo…</div>
+  <div id="ocrProgressWrap"><div id="ocrProgressBar"></div></div>
+</div>
+
+<div id="archiveOverlay">
+  <div class="archive-card">
+    <h3>Save this sheet?</h3>
+    <div class="sub" id="archiveSub">before starting a new manifest</div>
+    <div class="status" id="archiveStatus"></div>
+    <button class="archive-btn pdf" id="archivePdfBtn">📄 Download PDF & start new</button>
+    <button class="archive-btn email" id="archiveEmailBtn">✉️ Email PDF & start new</button>
+    <button class="archive-btn discard" id="archiveDiscardBtn">Discard without saving</button>
+    <button class="archive-btn cancel" id="archiveCancelBtn">Cancel</button>
+  </div>
+</div>
+
+<header>
+  <div class="title">
+    <h1>Carton Checker</h1>
+    <span class="job-id" id="jobIdLabel">no manifest loaded</span>
+  </div>
+  <div class="stats">
+    <div class="stat marked"><div class="n" id="markedCount">0</div><div class="l">Marked</div></div>
+    <div class="stat remaining"><div class="n" id="remainingCount">0</div><div class="l">Remaining</div></div>
+  </div>
+  <div class="mic-row">
+    <button id="micBtn"><span class="dot"></span><span id="micLabel">Tap to start listening</span></button>
+  </div>
+</header>
+
+<main>
+  <div class="setup" id="setupPanel">
+    <h2>Load manifest</h2>
+    <div style="display:flex; gap:8px;">
+      <button class="scan-btn" id="scanBtn" style="margin-bottom:0;">📷 Take photo</button>
+      <button class="scan-btn" id="galleryBtn" style="margin-bottom:0;">🖼 From gallery</button>
+    </div>
+    <input type="file" accept="image/*" capture="environment" id="photoInput" style="display:none">
+    <input type="file" accept="image/*" id="galleryInput" style="display:none">
+    <div class="review-note" id="reviewNote">Numbers pulled from the photo — check them against the sheet before loading. Snap another photo to add more, or tap the box to fix typos.</div>
+    <textarea id="manifestInput" placeholder="Paste carton numbers — spaces, commas, or new lines. For multiple jobs on one truck, put the 3-letter job code before its numbers: TQC 4012 4013 4014  DLL 2001. Mark a single/split-off box with *, e.g. 2001*"></textarea>
+    <div class="setup-actions">
+      <button class="btn primary" id="loadBtn">Load list</button>
+      <button class="btn ghost" id="editBtn" style="display:none;">Edit list</button>
+      <button class="btn ghost" id="resetBtn">Reset progress</button>
+      <button class="btn ghost" id="clearAllBtn" style="color:var(--red); border-color:#5c2420;">New manifest</button>
+    </div>
+  </div>
+
+  <div id="grid"></div>
+
+  <button class="log-toggle" id="logToggle">Show voice log ▾</button>
+  <div id="logPanel"></div>
+  <button class="log-toggle" id="historyToggle">Show saved sheets ▾</button>
+  <div id="historyPanel" style="display:none;"></div>
+  <div class="hint">Say numbers naturally. If multiple jobs are mixed, say the job code (e.g. "TQC") before its numbers — it'll stick until you say a different one. Say "status" for a count out loud, or "undo [number]" to un-mark. Keep this tab active — the mic pauses if the screen locks or you switch apps.</div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const STORAGE_KEY = 'cartonChecker_v1';
+const HISTORY_KEY = 'cartonChecker_history_v1';
+
+let state = {
+  items: [],       // list of {num, single}
+  marked: {},       // num -> true
+  listening: false,
+  numLength: 4,     // typical digit-length of manifest numbers, used for prefix completion
+  lastFullNumber: null,  // most recent full number heard, for "4012...13...14..." style call-outs
+  lastJob: null      // most recent job code heard/matched, for multi-job manifests
+};
+
+function computeNumLength(items) {
+  const counts = {};
+  items.forEach(i => { counts[i.num.length] = (counts[i.num.length] || 0) + 1; });
+  let best = null, bestCount = 0;
+  for (const len in counts) {
+    if (counts[len] > bestCount) { bestCount = counts[len]; best = len; }
+  }
+  return best ? parseInt(best) : 4;
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) state = Object.assign(state, JSON.parse(raw));
+  } catch(e){}
+}
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({items:state.items, marked:state.marked}));
+}
+
+function parseManifest(text) {
+  const tokens = text.split(/[,\s]+/).filter(Boolean);
+  let currentJob = '';
+  const items = [];
+  tokens.forEach(t => {
+    // a standalone 2-4 letter token (no digits) sets the job context for
+    // everything that follows, e.g. "TQC 4012 4013 DLL 2001"
+    if (/^[A-Za-z]{2,4}$/.test(t)) {
+      currentJob = t.toUpperCase();
+      return;
+    }
+    const single = t.endsWith('*');
+    const num = single ? t.slice(0, -1) : t;
+    if (num.length === 0) return;
+    items.push({ job: currentJob, num, single, key: currentJob + '|' + num });
+  });
+  return items;
+}
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  const jobs = [...new Set(state.items.map(i => i.job))];
+  const multiJob = jobs.length > 1 || (jobs.length === 1 && jobs[0] !== '');
+
+  jobs.forEach(job => {
+    const jobItems = state.items.filter(i => i.job === job);
+    if (multiJob) {
+      const header = document.createElement('div');
+      header.className = 'job-header';
+      const jobMarked = jobItems.filter(i => state.marked[i.key]).length;
+      header.textContent = (job || '(no job code)') + '  —  ' + jobMarked + ' / ' + jobItems.length;
+      grid.appendChild(header);
+    }
+    const subGrid = document.createElement('div');
+    subGrid.className = 'grid';
+    jobItems.forEach(item => subGrid.appendChild(makeChip(item)));
+    grid.appendChild(subGrid);
+  });
+  updateStats();
+}
+
+function makeChip(item) {
+  const chip = document.createElement('div');
+  chip.className = 'chip' + (state.marked[item.key] ? ' marked' : '') + (item.single ? ' single' : '');
+  chip.textContent = item.num;
+  chip.addEventListener('click', () => toggle(item));
+  return chip;
+}
+
+function updateStats() {
+  const total = state.items.length;
+  const markedN = state.items.filter(i => state.marked[i.key]).length;
+  document.getElementById('markedCount').textContent = markedN;
+  document.getElementById('remainingCount').textContent = total - markedN;
+  document.getElementById('jobIdLabel').textContent = total ? (total + ' cartons loaded') : 'no manifest loaded';
+}
+
+function toggle(item) {
+  if (state.marked[item.key]) delete state.marked[item.key];
+  else state.marked[item.key] = true;
+  save();
+  renderGrid();
+}
+
+function mark(item) {
+  if (!state.marked[item.key]) {
+    state.marked[item.key] = true;
+    save();
+    renderGrid();
+  }
+  return true;
+}
+
+function unmark(item) {
+  if (state.marked[item.key]) {
+    delete state.marked[item.key];
+    save();
+    renderGrid();
+  }
+  return true;
+}
+
+function generatePDFDoc(record) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const dt = new Date(record.timestamp);
+  const jobs = [...new Set(record.items.map(i => i.job))];
+
+  let y = 18;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text('Carton Checker — Completed Sheet', 14, y);
+  y += 8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text('Saved: ' + dt.toLocaleString(), 14, y);
+  y += 10;
+
+  const total = record.items.length;
+  const markedN = record.items.filter(i => record.marked[i.key]).length;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('Total: ' + markedN + ' / ' + total + ' marked' + (markedN < total ? '  —  INCOMPLETE' : '  —  COMPLETE'), 14, y);
+  y += 10;
+
+  jobs.forEach(job => {
+    const jobItems = record.items.filter(i => i.job === job);
+    const jobMarked = jobItems.filter(i => record.marked[i.key]).length;
+
+    if (y > 270) { doc.addPage(); y = 18; }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text((job || 'Job') + '  —  ' + jobMarked + ' / ' + jobItems.length, 14, y);
+    y += 7;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    let line = '';
+    jobItems.forEach(item => {
+      const mark = record.marked[item.key] ? '[x]' : '[ ]';
+      const tag = item.single ? '*' : '';
+      const chunk = mark + ' ' + item.num + tag + '   ';
+      if ((line + chunk).length > 95) {
+        if (y > 280) { doc.addPage(); y = 18; }
+        doc.text(line, 14, y);
+        y += 6;
+        line = '';
+      }
+      line += chunk;
+    });
+    if (line) {
+      if (y > 280) { doc.addPage(); y = 18; }
+      doc.text(line, 14, y);
+      y += 6;
+    }
+
+    const missing = jobItems.filter(i => !record.marked[i.key]);
+    if (missing.length) {
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(200, 40, 30);
+      if (y > 280) { doc.addPage(); y = 18; }
+      doc.text('MISSING: ' + missing.map(i => i.num).join(', '), 14, y);
+      doc.setTextColor(0, 0, 0);
+      y += 8;
+    } else {
+      y += 4;
+    }
+  });
+
+  return doc;
+}
+
+function pdfFilename(record) {
+  const dt = new Date(record.timestamp);
+  return 'carton-checker_' + dt.toISOString().slice(0,16).replace(/[:T]/g,'-') + '.pdf';
+}
+
+function downloadPDF(record) {
+  generatePDFDoc(record).save(pdfFilename(record));
+}
+
+async function emailPDF(record) {
+  const doc = generatePDFDoc(record);
+  const filename = pdfFilename(record);
+  const summary = summarizeRecord(record);
+  const shareText = 'Carton Checker report — ' + summary.jobLabel + ' — ' +
+    summary.markedN + '/' + summary.total + ' marked' +
+    (summary.markedN < summary.total ? ' (INCOMPLETE)' : ' (COMPLETE)');
+
+  // best path on mobile: native share sheet with the PDF attached, so the
+  // person can pick their email app and it lands as a real attachment.
+  try {
+    const blob = doc.output('blob');
+    const file = new File([blob], filename, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Carton Checker Report', text: shareText });
+      return;
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return; // person cancelled the share sheet
+  }
+
+  // fallback: download the PDF and open a pre-filled email draft; the
+  // person attaches the just-downloaded file manually.
+  doc.save(filename);
+  const subject = encodeURIComponent('Carton Checker Report - ' + new Date(record.timestamp).toLocaleDateString());
+  const body = encodeURIComponent(shareText +
+    '\n\nThe PDF report just downloaded to your device — attach it to this email before sending.');
+  window.location.href = 'mailto:?subject=' + subject + '&body=' + body;
+}
+
+// ---- archive / history ----
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { return []; }
+}
+
+function saveHistoryList(history) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-30)));
+}
+
+function archiveCurrentSheet() {
+  if (!state.items.length) return null;
+  const record = {
+    timestamp: new Date().toISOString(),
+    items: state.items,
+    marked: state.marked
+  };
+  const history = loadHistory();
+  history.push(record);
+  saveHistoryList(history);
+  return record;
+}
+
+function summarizeRecord(record) {
+  const jobs = [...new Set(record.items.map(i => i.job))];
+  const total = record.items.length;
+  const markedN = record.items.filter(i => record.marked[i.key]).length;
+  const jobLabel = jobs.filter(Boolean).join(', ') || 'single job';
+  return { jobs, total, markedN, jobLabel };
+}
+
+function renderHistory() {
+  const panel = document.getElementById('historyPanel');
+  const history = loadHistory().slice().reverse();
+  panel.innerHTML = '';
+  if (!history.length) {
+    panel.innerHTML = '<div class="hint">No saved sheets yet.</div>';
+    return;
+  }
+  history.forEach(record => {
+    const s = summarizeRecord(record);
+    const complete = s.markedN === s.total;
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    div.innerHTML =
+      '<div class="meta">' + new Date(record.timestamp).toLocaleString() + ' — ' + s.jobLabel + '</div>' +
+      '<div class="status ' + (complete ? 'complete' : 'incomplete') + '">' +
+        s.markedN + ' / ' + s.total + (complete ? ' complete' : ' — incomplete') +
+      '</div>' +
+      '<div class="history-actions"><button class="hist-pdf">📄 PDF</button><button class="hist-email">✉️ Email</button></div>';
+    div.querySelector('.hist-pdf').addEventListener('click', () => downloadPDF(record));
+    div.querySelector('.hist-email').addEventListener('click', () => emailPDF(record));
+    panel.appendChild(div);
+  });
+}
+
+function logLine(text, cls) {
+  const panel = document.getElementById('logPanel');
+  const div = document.createElement('div');
+  div.className = 'log-line' + (cls ? ' ' + cls : '');
+  div.textContent = text;
+  panel.appendChild(div);
+  panel.scrollTop = panel.scrollHeight;
+  while (panel.children.length > 60) panel.removeChild(panel.firstChild);
+}
+
+// ---- number-word parsing ----
+const WORD_DIGITS = {zero:'0',oh:'0',one:'1',two:'2',to:'2',too:'2',three:'3',four:'4',for:'4',
+  five:'5',six:'6',seven:'7',eight:'8',ate:'8',nine:'9'};
+const TEEN_TENS = {ten:'10',eleven:'11',twelve:'12',thirteen:'13',fourteen:'14',fifteen:'15',
+  sixteen:'16',seventeen:'17',eighteen:'18',nineteen:'19',twenty:'20',thirty:'30',forty:'40',
+  fifty:'50',sixty:'60',seventy:'70',eighty:'80',ninety:'90'};
+
+// magnitude-style numbers: "four thousand seventy seven" -> 4077
+const UNIT_VALUES = {zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9};
+const TEEN_VALUES = {ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,
+  sixteen:16,seventeen:17,eighteen:18,nineteen:19};
+const TENS_VALUES = {twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
+
+function wordsToMagnitudeNumbers(tokens) {
+  const results = [];
+  let current = 0, group = 0, hasValue = false;
+  function flushAll() {
+    if (hasValue) { results.push(current + group); }
+    current = 0; group = 0; hasValue = false;
+  }
+  tokens.forEach(tok => {
+    if (tok in UNIT_VALUES) { group += UNIT_VALUES[tok]; hasValue = true; }
+    else if (tok in TEEN_VALUES) { group += TEEN_VALUES[tok]; hasValue = true; }
+    else if (tok in TENS_VALUES) { group += TENS_VALUES[tok]; hasValue = true; }
+    else if (tok === 'hundred') { group = (group || 1) * 100; hasValue = true; }
+    else if (tok === 'thousand') { current += (group || 1) * 1000; group = 0; hasValue = true; }
+    else { flushAll(); }
+  });
+  flushAll();
+  return results;
+}
+
+function extractCandidates(text) {
+  const noCommas = text.replace(/,/g, '');
+  const lower = noCommas.toLowerCase();
+  const tokens = lower.match(/[a-z0-9']+/g) || [];
+  const found = [];
+
+  (noCommas.match(/\d+/g) || []).forEach(t => found.push(t));
+
+  let buf = '';
+  tokens.forEach(tok => {
+    if (WORD_DIGITS[tok] !== undefined) { buf += WORD_DIGITS[tok]; }
+    else { if (buf.length >= 2) found.push(buf); buf = ''; }
+  });
+  if (buf.length >= 2) found.push(buf);
+
+  let combo = '';
+  tokens.forEach(tok => {
+    if (TEEN_TENS[tok] !== undefined) { combo += TEEN_TENS[tok]; }
+    else if (WORD_DIGITS[tok] !== undefined && combo) { combo += WORD_DIGITS[tok]; }
+    else { if (combo.length >= 2) found.push(combo); combo = ''; }
+  });
+  if (combo.length >= 2) found.push(combo);
+
+  // "four thousand seventy seven" -> 4077, "four thousand two hundred twenty two" -> 4222
+  wordsToMagnitudeNumbers(tokens).forEach(n => found.push(String(n)));
+
+  return found;
+}
+
+// ---- speech recognition ----
+let recognition = null;
+let shouldListen = false;
+
+function initRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    alert('Speech recognition is not supported in this browser. Try Chrome on Android.');
+    return null;
+  }
+  const r = new SR();
+  r.continuous = true;
+  r.interimResults = false;
+  r.lang = 'en-US';
+
+  r.onresult = (e) => {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (!e.results[i].isFinal) continue;
+      const text = e.results[i][0].transcript.trim();
+      handleUtterance(text);
+    }
+  };
+
+  r.onerror = (e) => {
+    logLine('[mic error: ' + e.error + ']');
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      stopListening();
+    }
+  };
+
+  r.onend = () => {
+    if (shouldListen) {
+      try { r.start(); } catch(e) {}
+    }
+  };
+
+  return r;
+}
+
+function handleUtterance(text) {
+  const lower = text.toLowerCase();
+  logLine('heard: "' + text + '"');
+
+  if (lower.includes('status')) {
+    const total = state.items.length;
+    const markedN = state.items.filter(i => state.marked[i.key]).length;
+    logLine('STATUS: ' + markedN + ' marked, ' + (total-markedN) + ' remaining', 'hit');
+    speak(markedN + ' marked, ' + (total-markedN) + ' remaining');
+    return;
+  }
+
+  // detect a spoken job code (e.g. "TQC") among the manifest's known job codes
+  const knownJobs = [...new Set(state.items.map(i => i.job).filter(Boolean))];
+  const compressed = lower.replace(/[^a-z]/g, '');
+  let spokenJob = null;
+  knownJobs.forEach(j => {
+    if (compressed.includes(j.toLowerCase())) spokenJob = j;
+  });
+  if (spokenJob && spokenJob !== state.lastJob) {
+    state.lastJob = spokenJob;
+    state.lastFullNumber = null; // don't carry a prefix across job contexts
+  }
+  const effectiveJob = spokenJob || state.lastJob || '';
+
+  const undoMatch = lower.match(/undo\s+(.+)/);
+  const candidates = extractCandidates(undoMatch ? undoMatch[1] : text);
+
+  let any = false;
+  candidates.forEach(c => {
+    let target = findTarget(c, effectiveJob);
+
+    if (!target && !undoMatch && c.length < state.numLength && state.lastFullNumber) {
+      // short follow-up like "13" or "twenty two" after "4012" -> try completing
+      // it with the prefix of the last full number heard, within the same job.
+      const prefixLen = state.numLength - c.length;
+      const prefixed = state.lastFullNumber.slice(0, prefixLen) + c;
+      target = findTarget(prefixed, effectiveJob);
+    }
+
+    if (target === 'AMBIGUOUS') {
+      logLine('(ambiguous: "' + c + '" matches more than one job — say the job code)', 'miss');
+      return;
+    }
+    if (!target) return;
+
+    if (undoMatch) {
+      if (unmark(target)) { logLine('UNDO -> ' + (target.job ? target.job + ' ' : '') + target.num, 'hit'); any = true; }
+    } else {
+      const wasMarked = state.marked[target.key];
+      if (mark(target)) {
+        if (target.num.length === state.numLength) {
+          state.lastFullNumber = target.num;
+          state.lastJob = target.job;
+        }
+        if (!wasMarked) {
+          const note = target.num !== c ? (' (from "' + c + '")') : '';
+          const jobTag = target.job ? (target.job + ' ') : '';
+          logLine('MARKED -> ' + jobTag + target.num + note, 'hit');
+          any = true;
+        }
+      }
+    }
+  });
+  if (!any) logLine('(no manifest match)', 'miss');
+}
+
+// find the manifest item for a given number string, scoped to a job if one
+// is known; returns 'AMBIGUOUS' if the number exists under multiple jobs
+// and no job context resolves it.
+function findTarget(num, job) {
+  const matches = state.items.filter(i => i.num === num);
+  if (matches.length === 0) return null;
+  if (matches.length === 1) return matches[0];
+  if (job) {
+    const jobMatch = matches.find(i => i.job === job);
+    if (jobMatch) return jobMatch;
+  }
+  return 'AMBIGUOUS';
+}
+
+function speak(text) {
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.05;
+    window.speechSynthesis.speak(u);
+  } catch(e) {}
+}
+
+function startListening() {
+  if (!state.items.length) {
+    alert('Load a manifest list first.');
+    return;
+  }
+  if (!recognition) recognition = initRecognition();
+  if (!recognition) return;
+  shouldListen = true;
+  try { recognition.start(); } catch(e) {}
+  document.getElementById('micBtn').classList.add('live');
+  document.getElementById('micLabel').textContent = 'Listening — tap to stop';
+}
+
+function stopListening() {
+  shouldListen = false;
+  if (recognition) { try { recognition.stop(); } catch(e) {} }
+  document.getElementById('micBtn').classList.remove('live');
+  document.getElementById('micLabel').textContent = 'Tap to start listening';
+}
+
+// ---- photo scan / OCR ----
+function setOverlay(open, statusText, pct) {
+  const overlay = document.getElementById('ocrOverlay');
+  overlay.classList.toggle('open', open);
+  if (statusText !== undefined) document.getElementById('ocrStatus').textContent = statusText;
+  if (pct !== undefined) document.getElementById('ocrProgressBar').style.width = pct + '%';
+}
+
+function mergeNumbersIntoTextarea(numbers) {
+  const ta = document.getElementById('manifestInput');
+  const existing = ta.value.split(/[,\s]+/).filter(Boolean);
+  const existingNums = new Set(existing.map(t => t.endsWith('*') ? t.slice(0,-1) : t));
+  const added = [];
+  numbers.forEach(n => {
+    if (!existingNums.has(n)) { existingNums.add(n); added.push(n); }
+  });
+  const merged = existing.concat(added);
+  ta.value = merged.join(' ');
+  return added;
+}
+
+document.getElementById('scanBtn').addEventListener('click', () => {
+  document.getElementById('photoInput').click();
+});
+document.getElementById('galleryBtn').addEventListener('click', () => {
+  document.getElementById('galleryInput').click();
+});
+
+document.getElementById('photoInput').addEventListener('change', handlePhotoFile);
+document.getElementById('galleryInput').addEventListener('change', handlePhotoFile);
+
+async function handlePhotoFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  setOverlay(true, 'reading photo…', 0);
+  try {
+    const result = await Tesseract.recognize(file, 'eng', {
+      logger: (m) => {
+        if (m.status === 'recognizing text') {
+          setOverlay(true, 'reading numbers… ' + Math.round(m.progress * 100) + '%', Math.round(m.progress * 100));
+        } else if (m.status) {
+          setOverlay(true, m.status + '…', undefined);
+        }
+      }
+    });
+    const text = result.data.text || '';
+    // Only pull numbers from the manifest grid — cut off anything before the
+    // "Delivery / VLI / Cartons" header, so street addresses, zip codes, and
+    // ship dates in the letterhead don't get mistaken for carton numbers.
+    let gridText = text;
+    const headerMatch = text.match(/Delivery[\s\S]*?Cartons/i);
+    if (headerMatch) {
+      gridText = text.slice(text.indexOf(headerMatch[0]) + headerMatch[0].length);
+    }
+    // Carton numbers on these manifests are consistently 4 digits.
+    // Longer numbers (BOL, seal, delivery IDs) and short ones (totals, page counts) are filtered out.
+    const found = (gridText.match(/\b\d{4}\b/g) || []);
+    const unique = [...new Set(found)];
+    setOverlay(false);
+    if (!unique.length) {
+      alert('Could not find any 4-digit numbers in that photo. Try a clearer, well-lit shot.');
+      return;
+    }
+    const added = mergeNumbersIntoTextarea(unique);
+    document.getElementById('reviewNote').classList.add('show');
+    document.getElementById('reviewNote').textContent =
+      'Found ' + unique.length + ' numbers, ' + added.length + ' new — check against the sheet before loading. Snap another photo to add more.';
+  } catch(err) {
+    setOverlay(false);
+    alert('Scan failed: ' + err.message + '. You can still type numbers in manually.');
+  }
+  e.target.value = '';
+}
+
+// ---- UI wiring ----
+document.getElementById('micBtn').addEventListener('click', () => {
+  if (shouldListen) stopListening(); else startListening();
+});
+
+document.getElementById('loadBtn').addEventListener('click', () => {
+  const text = document.getElementById('manifestInput').value;
+  const items = parseManifest(text);
+  if (!items.length) return;
+  state.items = items;
+  state.marked = {};
+  state.numLength = computeNumLength(items);
+  state.lastFullNumber = null;
+  save();
+  renderGrid();
+  document.getElementById('setupPanel').style.display = 'none';
+  document.getElementById('editBtn').style.display = 'inline-block';
+});
+
+document.getElementById('editBtn').addEventListener('click', () => {
+  document.getElementById('setupPanel').style.display = 'block';
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('Clear all marked progress? Manifest list stays loaded.')) return;
+  state.marked = {};
+  save();
+  renderGrid();
+});
+
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+  if (!state.items.length) {
+    startFreshManifest();
+    return;
+  }
+  const s = summarizeRecord({ items: state.items, marked: state.marked });
+  const complete = s.markedN === s.total;
+  document.getElementById('archiveSub').textContent = s.jobLabel + ' — before starting a new manifest';
+  const statusEl = document.getElementById('archiveStatus');
+  statusEl.textContent = s.markedN + ' / ' + s.total + (complete ? ' marked — complete' : ' marked — incomplete');
+  statusEl.className = 'status ' + (complete ? 'complete' : 'incomplete');
+  document.getElementById('archiveOverlay').classList.add('open');
+});
+
+document.getElementById('archivePdfBtn').addEventListener('click', () => {
+  const record = archiveCurrentSheet();
+  if (record) downloadPDF(record);
+  document.getElementById('archiveOverlay').classList.remove('open');
+  startFreshManifest();
+});
+
+document.getElementById('archiveEmailBtn').addEventListener('click', async () => {
+  const record = archiveCurrentSheet();
+  document.getElementById('archiveOverlay').classList.remove('open');
+  if (record) await emailPDF(record);
+  startFreshManifest();
+});
+
+document.getElementById('archiveDiscardBtn').addEventListener('click', () => {
+  if (!confirm('Discard this sheet without saving a record? This cannot be undone.')) return;
+  document.getElementById('archiveOverlay').classList.remove('open');
+  startFreshManifest();
+});
+
+document.getElementById('archiveCancelBtn').addEventListener('click', () => {
+  document.getElementById('archiveOverlay').classList.remove('open');
+});
+
+function startFreshManifest() {
+  state.items = [];
+  state.marked = {};
+  state.lastFullNumber = null;
+  state.lastJob = null;
+  save();
+  document.getElementById('manifestInput').value = '';
+  document.getElementById('grid').innerHTML = '';
+  document.getElementById('setupPanel').style.display = 'block';
+  document.getElementById('editBtn').style.display = 'none';
+  updateStats();
+  stopListening();
+  renderHistory();
+}
+
+document.getElementById('historyToggle').addEventListener('click', () => {
+  const panel = document.getElementById('historyPanel');
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  document.getElementById('historyToggle').textContent = open ? 'Show saved sheets ▾' : 'Hide saved sheets ▴';
+  if (!open) renderHistory();
+});
+
+document.getElementById('logToggle').addEventListener('click', () => {
+  const panel = document.getElementById('logPanel');
+  panel.classList.toggle('open');
+  document.getElementById('logToggle').textContent = panel.classList.contains('open')
+    ? 'Hide voice log ▴' : 'Show voice log ▾';
+});
+
+function itemsToText(items) {
+  const parts = [];
+  let lastJob = undefined;
+  items.forEach(i => {
+    if (i.job !== lastJob) { parts.push(i.job || ''); lastJob = i.job; }
+    parts.push(i.num + (i.single ? '*' : ''));
+  });
+  return parts.filter(Boolean).join(' ');
+}
+
+// init
+load();
+if (state.items.length) {
+  state.numLength = computeNumLength(state.items);
+  document.getElementById('manifestInput').value = itemsToText(state.items);
+  document.getElementById('setupPanel').style.display = 'none';
+  document.getElementById('editBtn').style.display = 'inline-block';
+  renderGrid();
+}
+</script>
+</body>
+</html>
