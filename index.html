@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Carton Checker</title>
+<title>Bingo Sheet Checker</title>
 <style>
   :root{
     --bg:#14171a;
@@ -227,7 +227,7 @@
 
 <header>
   <div class="title">
-    <h1>Carton Checker</h1>
+    <h1>Bingo Sheet Checker</h1>
     <span class="job-id" id="jobIdLabel">no manifest loaded</span>
   </div>
   <div class="stats">
@@ -401,7 +401,7 @@ function generatePDFDoc(record) {
   let y = 18;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(15);
-  doc.text('Carton Checker — Completed Sheet', 14, y);
+  doc.text('Bingo Sheet Checker — Completed Sheet', 14, y);
   y += 8;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
@@ -475,7 +475,7 @@ async function emailPDF(record) {
   const doc = generatePDFDoc(record);
   const filename = pdfFilename(record);
   const summary = summarizeRecord(record);
-  const shareText = 'Carton Checker report — ' + summary.jobLabel + ' — ' +
+  const shareText = 'Bingo Sheet Checker report — ' + summary.jobLabel + ' — ' +
     summary.markedN + '/' + summary.total + ' marked' +
     (summary.markedN < summary.total ? ' (INCOMPLETE)' : ' (COMPLETE)');
 
@@ -485,7 +485,7 @@ async function emailPDF(record) {
     const blob = doc.output('blob');
     const file = new File([blob], filename, { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: 'Carton Checker Report', text: shareText });
+      await navigator.share({ files: [file], title: 'Bingo Sheet Checker Report', text: shareText });
       return;
     }
   } catch (e) {
@@ -495,7 +495,7 @@ async function emailPDF(record) {
   // fallback: download the PDF and open a pre-filled email draft; the
   // person attaches the just-downloaded file manually.
   doc.save(filename);
-  const subject = encodeURIComponent('Carton Checker Report - ' + new Date(record.timestamp).toLocaleDateString());
+  const subject = encodeURIComponent('Bingo Sheet Checker Report - ' + new Date(record.timestamp).toLocaleDateString());
   const body = encodeURIComponent(shareText +
     '\n\nThe PDF report just downloaded to your device — attach it to this email before sending.');
   window.location.href = 'mailto:?subject=' + subject + '&body=' + body;
