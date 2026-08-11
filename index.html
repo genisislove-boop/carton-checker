@@ -619,12 +619,28 @@ function extractCandidates(text) {
   const lower = noCommas.toLowerCase();
   const tokens = lower.match(/[a-z0-9']+/g) || [];
   const found = [];
+  const n = state.numLength || 4;
 
-  (noCommas.match(/\d+/g) || []).forEach(t => found.push(t));
+  (noCommas.match(/\d+/g) || []).forEach(t => {
+    found.push(t);
+    // rapid-fire speech with no gap between numbers can come back as one
+    // glued digit string instead of separate ones (three 4-digit numbers
+    // said back-to-back becomes one 12-digit run) — if the length is a
+    // clean multiple of the manifest's number length, also offer the
+    // individual chunks so it still resolves without needing a pause
+    if (t.length > n && t.length % n === 0) {
+      for (let i = 0; i < t.length; i += n) found.push(t.slice(i, i + n));
+    }
+  });
 
   let buf = '';
   tokens.forEach(tok => {
-    if (WORD_DIGITS[tok] !== undefined) { buf += WORD_DIGITS[tok]; }
+    if (WORD_DIGITS[tok] !== undefined) {
+      buf += WORD_DIGITS[tok];
+      // same fix for the spelled-out-digits path: flush every numLength
+      // digits instead of letting one long rapid run pile up unsplit
+      if (buf.length >= n) { found.push(buf); buf = ''; }
+    }
     else { if (buf.length >= 2) found.push(buf); buf = ''; }
   });
   if (buf.length >= 2) found.push(buf);
@@ -712,10 +728,16 @@ function handleUtterance(text) {
   const scopeLabel = (multiJob && effectiveJob) ? effectiveJob + ': ' : '';
 
   if (lower.includes('status')) {
-    const total = scopeItems.length;
-    const markedN = scopeItems.filter(i => state.marked[i.key]).length;
-    logLine('STATUS ' + scopeLabel + markedN + ' marked, ' + (total-markedN) + ' remaining', 'hit');
-    speak(scopeLabel + markedN + ' marked, ' + (total-markedN) + ' remaining');
+    const overallTotal = state.items.length;
+    const overallMarked = state.items.filter(i => state.marked[i.key]).length;
+    let msg = overallMarked + ' marked, ' + (overallTotal - overallMarked) + ' remaining overall';
+    if (scopeLabel) {
+      const jobTotal = scopeItems.length;
+      const jobMarked = scopeItems.filter(i => state.marked[i.key]).length;
+      msg = scopeLabel + jobMarked + ' marked, ' + (jobTotal - jobMarked) + ' remaining. ' + msg + '.';
+    }
+    logLine('STATUS ' + msg, 'hit');
+    speak(msg);
     return;
   }
 
