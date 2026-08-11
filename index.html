@@ -272,7 +272,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sam-js@0.3.1/dist/samjs.min.js"></script>
 <script>
 const STORAGE_KEY = 'cartonChecker_v1';
 const HISTORY_KEY = 'cartonChecker_history_v1';
@@ -695,8 +694,13 @@ function handleUtterance(text) {
   const knownJobs = [...new Set(state.items.map(i => i.job).filter(Boolean))];
   const compressed = normalizeForJobMatch(text);
   let spokenJob = null;
+  // if multiple known job codes match (e.g. "TQC" and "TQC2" both appear as
+  // substrings when "TQC2" is what was actually said), prefer the longest,
+  // most specific match rather than whichever happened to be checked last
   knownJobs.forEach(j => {
-    if (compressed.includes(j.toLowerCase())) spokenJob = j;
+    if (compressed.includes(j.toLowerCase())) {
+      if (!spokenJob || j.length > spokenJob.length) spokenJob = j;
+    }
   });
   if (spokenJob && spokenJob !== state.lastJob) {
     state.lastJob = spokenJob;
@@ -793,23 +797,7 @@ function findTarget(num, job) {
   return 'AMBIGUOUS';
 }
 
-// Bundled S.A.M. (Software Automatic Mouth) voice synthesizer — gives every
-// device the exact same ~21KB, fully offline, always-available voice instead
-// of depending on whatever TTS engine (or lack of one) happens to be
-// installed on the phone. Falls back to the browser's native voice if the
-// CDN script didn't load (e.g. no signal on first visit before it's cached).
-let samVoice = null;
-try {
-  if (typeof SamJs !== 'undefined') samVoice = new SamJs();
-} catch(e) { samVoice = null; }
-
 function speak(text) {
-  if (samVoice) {
-    try {
-      samVoice.speak(text);
-      return;
-    } catch(e) { /* fall through to native voice below */ }
-  }
   try {
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1.05;
@@ -845,19 +833,6 @@ function setOverlay(open, statusText, pct) {
   if (pct !== undefined) document.getElementById('ocrProgressBar').style.width = pct + '%';
 }
 
-function mergeNumbersIntoTextarea(numbers) {
-  const ta = document.getElementById('manifestInput');
-  const existing = ta.value.split(/[,\s]+/).filter(Boolean);
-  const existingNums = new Set(existing.map(t => t.endsWith('*') ? t.slice(0,-1) : t));
-  const added = [];
-  numbers.forEach(n => {
-    if (!existingNums.has(n)) { existingNums.add(n); added.push(n); }
-  });
-  const merged = existing.concat(added);
-  ta.value = merged.join(' ');
-  return added;
-}
-
 document.getElementById('scanBtn').addEventListener('click', () => {
   document.getElementById('photoInput').click();
 });
@@ -891,37 +866,63 @@ async function handlePhotoFile(e) {
     if (headerMatch) {
       gridText = text.slice(text.indexOf(headerMatch[0]) + headerMatch[0].length);
     }
-    // Carton numbers on these manifests are consistently 4 digits.
-    // Longer numbers (BOL, seal, delivery IDs) and short ones (totals, page counts) are filtered out.
-    const found = (gridText.match(/\b\d{4}\b/g) || []);
-    const unique = [...new Set(found)];
-    setOverlay(false);
-    if (!unique.length) {
-      alert('Could not find any 4-digit numbers in that photo. Try a clearer, well-lit shot.');
-      return;
-    }
-    const added = mergeNumbersIntoTextarea(unique);
 
-    // Job/VLI codes are letters, so they never match the digit regex above and
-    // would otherwise be silently dropped. Detect likely candidates — any
-    // short token that mixes letters and digits (or is pure letters) — and
-    // flag them instead of guessing where they belong. OCR reading order
-    // doesn't reliably preserve which numbers go with which code in a column
-    // layout, so this stays a manual add. Codes can be things like "TQC",
-    // "14Q", "ZZT", "DLL3TF" — any letter/digit combination — so the only
-    // thing that rules a token OUT is being pure digits (a carton number).
+    // Walk the OCR'd text in the order it was actually printed on the page —
+    // on these manifests, a job/VLI code always appears immediately before
+    // its own block of numbers (same "CODE num num num CODE num" pattern as
+    // typing it in manually), so we can auto-group by just tracking which
+    // code we most recently passed, instead of only pulling numbers and
+    // throwing the codes away. Carton numbers are consistently 4 digits;
+    // anything else with a letter in it (and not a common header word) is
+    // treated as a job code and switches the active group.
     const jobStoplist = new Set(['DEL','QTY','PCS','ITEM','DESC','ROOM','DATE','SHIP',
       'PAGE','TOTAL','CARTON','CARTONS','DELIVERY','VLI','CODE','SEAL','BOL','FROM','TO',
       'PO','NO','REF','LOT','SKU','QTR','FMG','INC','LLC','CO']);
-    const jobCandidates = [...new Set((gridText.match(/\b[A-Z0-9]{2,8}\b/g) || [])
-      .filter(w => /[A-Z]/.test(w) && !/^\d+$/.test(w) && !jobStoplist.has(w)))];
+    const isJobToken = (tok) => /[A-Za-z]/.test(tok) && tok.length >= 2 && tok.length <= 8
+      && !jobStoplist.has(tok.toUpperCase());
+
+    const tokens = gridText.match(/[A-Za-z0-9]+/g) || [];
+    let currentJob = '';
+    const jobsSeen = new Set();
+    const taggedItems = [];
+    tokens.forEach(tok => {
+      if (/^\d{4}$/.test(tok)) {
+        taggedItems.push({ job: currentJob, num: tok, single: false, key: currentJob + '|' + tok });
+        return;
+      }
+      if (isJobToken(tok)) {
+        currentJob = tok.toUpperCase();
+        jobsSeen.add(currentJob);
+      }
+    });
+
+    setOverlay(false);
+    if (!taggedItems.length) {
+      alert('Could not find any 4-digit numbers in that photo. Try a clearer, well-lit shot.');
+      return;
+    }
+
+    // merge with whatever's already in the box, de-duping by job+number so
+    // the same number under two different jobs (e.g. shared carton numbers)
+    // isn't treated as a duplicate of itself
+    const existingItems = parseManifest(document.getElementById('manifestInput').value);
+    const existingKeys = new Set(existingItems.map(i => i.key));
+    const newOnes = [];
+    taggedItems.forEach(item => {
+      if (!existingKeys.has(item.key)) {
+        existingKeys.add(item.key);
+        existingItems.push(item);
+        newOnes.push(item);
+      }
+    });
+    document.getElementById('manifestInput').value = itemsToText(existingItems);
 
     document.getElementById('reviewNote').classList.add('show');
-    let note = 'Found ' + unique.length + ' numbers, ' + added.length + ' new — check against the sheet before loading. Snap another photo to add more.';
-    if (jobCandidates.length) {
-      note += '\n\nPossible job codes spotted: ' + jobCandidates.join(', ') +
-        ' — if this manifest has multiple jobs mixed together, type the code right before its numbers ' +
-        '(e.g. "' + jobCandidates[0] + ' 4012 4013") so they group correctly. I can\'t place these for you reliably from a photo.';
+    let note = 'Found ' + taggedItems.length + ' numbers' +
+      (jobsSeen.size ? ' across ' + jobsSeen.size + ' job code' + (jobsSeen.size > 1 ? 's' : '') + ' (' + [...jobsSeen].join(', ') + ')' : '') +
+      ', ' + newOnes.length + ' new — check against the sheet before loading. Snap another photo to add more.';
+    if (jobsSeen.size) {
+      note += ' A split/single box (e.g. SCX) may land grouped under its own short code instead of tagged with * under its parent job — fix that by hand if you want the dashed-outline marker.';
     }
     document.getElementById('reviewNote').textContent = note;
   } catch(err) {
