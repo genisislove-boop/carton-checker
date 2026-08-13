@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Wall Map</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --bg: #17181B; --panel: #1F2124; --panel-2: #24262A; --line: #34363B;
+  --text: #F2F0EA; --muted: #9A9C9F; --safety: #F4B400; --safety-dark: #C89200; --danger: #D64545;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; }
+#screen { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; min-height: 100vh; }
+
+.storage-banner { background: #3A2A0E; color: var(--safety); font-family: 'IBM Plex Mono', monospace; font-size: 12px; text-align: center; padding: 8px 12px; border-bottom: 1px solid var(--safety-dark); }
+
+.header { margin-bottom: 18px; }
+.eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.18em; color: var(--safety); margin-bottom: 4px; }
+.title { font-family: 'Archivo Black', sans-serif; font-size: 28px; margin: 0; }
+
+.search-bar { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 18px; }
+.search-bar input { background: transparent; border: none; outline: none; color: var(--text); font-size: 15px; flex: 1; font-family: 'Inter', sans-serif; }
+.search-bar input::placeholder { color: var(--muted); }
+
+.wall-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.wall-tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; text-align: left; cursor: pointer; }
+.wall-num { font-family: 'IBM Plex Mono', monospace; color: var(--safety); font-size: 13px; letter-spacing: 0.05em; margin-bottom: 4px; }
+.wall-tile-name { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+
+.compass-map { position: relative; padding: 30px 40px; margin-bottom: 20px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; }
+.legend { margin-bottom: 16px; }
+.legend-summary { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); letter-spacing: 0.05em; cursor: pointer; padding: 4px 0; }
+.legend-body { font-size: 13px; color: var(--text); line-height: 1.5; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; margin-top: 6px; }
+.compass-label { position: absolute; font-family: 'IBM Plex Mono', monospace; color: var(--muted); font-size: 12px; letter-spacing: 0.08em; }
+.compass-n { top: 8px; left: 50%; transform: translateX(-50%); }
+.compass-s { bottom: 8px; left: 50%; transform: translateX(-50%); }
+.compass-w { left: 8px; top: 50%; transform: translateY(-50%); }
+.compass-e { right: 8px; top: 50%; transform: translateY(-50%); }
+.compass-strip { display: flex; flex-direction: column; }
+.compass-block { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.compass-wall { position: relative; text-align: center; padding: 7px 0; font-family: 'IBM Plex Mono', monospace; color: var(--text); font-weight: 600; font-size: 13px; }
+.flag-badge { display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.03em; padding: 2px 6px; border-radius: 4px; margin-top: 3px; }
+.flag-overflow { background: #E8590C; color: #17181B; }
+.flag-old { background: #F4B400; color: #17181B; }
+.compass-wall-hl { background: var(--safety); color: #17181B; }
+.compass-dot { position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #17181B; box-shadow: 0 0 6px rgba(0,0,0,0.6); transform: translate(-50%, -50%); }
+.compass-divider { height: 1px; background: var(--line); margin: 0 10px; }
+.compass-gap { border: 1px dashed var(--line); border-radius: 4px; margin: 4px 0; padding: 3px 0; text-align: center; }
+.compass-gap-label { font-family: 'IBM Plex Mono', monospace; color: var(--muted); font-size: 9px; letter-spacing: 0.06em; }
+
+.primary-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; background: var(--safety); color: #17181B; border: none; border-radius: 10px; padding: 15px; font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; margin-bottom: 18px; cursor: pointer; }
+.primary-btn:active { background: var(--safety-dark); }
+.secondary-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 12px; letter-spacing: 0.05em; margin-bottom: 12px; cursor: pointer; }
+.secondary-btn:active { background: var(--line); }
+
+.empty-state { padding: 30px 10px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
+.empty-title { font-family: 'IBM Plex Mono', monospace; font-size: 13px; margin-bottom: 6px; }
+
+.results { display: flex; flex-direction: column; gap: 8px; }
+.result-row { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; text-align: left; width: 100%; }
+.swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+.job-no { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 14px; }
+.result-text { flex: 1; min-width: 0; }
+.muted { color: var(--muted); font-size: 13px; }
+.small { font-size: 12px; }
+
+.icon-btn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 7px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+.icon-btn.danger { color: var(--danger); }
+.icon-btn svg { width: 18px; height: 18px; }
+
+.editor-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.name-input { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; color: var(--text); font-size: 14px; font-family: 'Inter', sans-serif; min-width: 0; }
+
+.chip-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.chip-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 0.08em; }
+.chip { width: 24px; height: 24px; border-radius: 6px; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.chip.active { border-color: var(--text); transform: scale(1.1); }
+.chip-clear { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; color: var(--muted); padding: 4px; cursor: pointer; }
+
+.photo-list { display: flex; flex-direction: column; gap: 10px; }
+.photo-thumb-row { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.photo-thumb { position: relative; width: 64px; height: 64px; border-radius: 6px; overflow: hidden; border: none; padding: 0; cursor: pointer; flex-shrink: 0; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb-overlay { position: absolute; inset: 0; }
+.thumb-dot { position: absolute; width: 6px; height: 6px; border-radius: 2px; transform: translate(-50%, -50%); box-shadow: 0 0 0 1px rgba(0,0,0,0.5); }
+.photo-meta { flex: 1; min-width: 0; }
+.bay-name { font-weight: 600; font-size: 14px; }
+
+.grid-wrap { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); cursor: crosshair; touch-action: none; }
+.bay-photo { width: 100%; display: block; pointer-events: none; user-select: none; }
+.marker { position: absolute; border-radius: 5px; transform: translate(-50%, -50%); cursor: grab; touch-action: none; }
+.flash-highlight { animation: flash 0.8s ease-in-out 2; }
+@keyframes flash { 0%,100% { box-shadow: 0 0 0 2px rgba(23,24,27,0.85); } 50% { box-shadow: 0 0 0 5px var(--safety); } }
+
+.hint { font-size: 12px; color: var(--muted); margin: 10px 0 4px; line-height: 1.5; }
+
+.sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: flex; align-items: flex-end; z-index: 50; }
+.sheet { background: var(--panel); width: 100%; max-width: 480px; margin: 0 auto; border-radius: 16px 16px 0 0; padding: 20px 18px 26px; border: 1px solid var(--line); border-bottom: none; max-height: 88vh; overflow-y: auto; }
+.sheet-title { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted); letter-spacing: 0.08em; margin-bottom: 12px; }
+.job-input { width: 100%; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; margin-bottom: 10px; }
+.job-input.secondary { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 14px; }
+.job-input.notes { resize: none; }
+.suggest-box { display: flex; flex-direction: column; gap: 4px; margin: -4px 0 10px; }
+.suggest-item { text-align: left; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 13px; color: var(--text); cursor: pointer; }
+.suggest-item:active { background: var(--line); }
+.field-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 0.08em; margin: 12px 0 8px; }
+.featured-job-card { display: block; width: 100%; text-align: left; background: var(--panel); border: 2px solid var(--safety); border-radius: 12px; padding: 16px; cursor: pointer; margin-bottom: 4px; }
+.featured-job-card:active { background: var(--panel-2); }
+.featured-job-header { display: flex; align-items: flex-start; gap: 10px; }
+.featured-job-header .swatch { margin-top: 4px; }
+.featured-job-header > div:nth-child(2) { flex: 1; }
+.featured-job-status { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.reason-list { display: flex; flex-direction: column; gap: 4px; }
+.reason-item { font-size: 13px; color: var(--text); }
+.status-row { display: flex; gap: 8px; margin-bottom: 4px; }
+.status-btn { flex: 1; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--muted); cursor: pointer; }
+.status-btn-selected { background: var(--panel); border-color: var(--safety); color: var(--text); font-weight: 600; }
+.swatch-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.swatch-btn { width: 32px; height: 32px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.swatch-btn.selected { border-color: var(--text); transform: scale(1.08); }
+.size-row { display: flex; gap: 10px; }
+.size-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 11px; cursor: pointer; }
+.size-btn.selected { border-color: var(--safety); color: var(--text); }
+.size-preview { border-radius: 3px; }
+.sheet-actions { display: flex; gap: 10px; margin-top: 18px; }
+.clear-btn { display: flex; align-items: center; gap: 6px; background: transparent; border: 1px solid var(--line); color: var(--danger); border-radius: 8px; padding: 11px 14px; font-size: 13px; cursor: pointer; }
+.save-cell-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--safety); color: #17181B; border: none; border-radius: 8px; padding: 11px; font-weight: 600; font-size: 14px; cursor: pointer; }
+
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line); color: var(--text); padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 60; font-family: 'IBM Plex Mono', monospace; }
+button { font: inherit; color: inherit; }
+</style>
+</head>
+<body>
+<div id="banner"></div>
+<div id="screen"></div>
+<input type="file" id="fileInput" accept="image/*" style="display:none">
+<input type="file" id="ocrFileInput" accept="image/*" style="display:none">
+<div id="toast" class="toast" style="display:none"></div>
+
+<script>
+// ---------------------------------------------------------------------
+// Data + storage (localStorage — this file is meant to be opened
+// directly in a browser, so it doesn't depend on any host app's APIs)
+// ---------------------------------------------------------------------
+const COLORS = [
+  { name: "Red",    hex: "#D64545" },
+  { name: "Orange", hex: "#E8590C" },
+  { name: "Yellow", hex: "#F4B400" },
+  { name: "Green",  hex: "#2E8B57" },
+  { name: "Teal",   hex: "#17A398" },
+  { name: "Blue",   hex: "#2F80ED" },
+  { name: "Violet", hex: "#8E44AD" },
+  { name: "Pink",   hex: "#E84393" },
+];
+const SIZES = { S: 16, M: 24, L: 34 };
+const MAX_IMG_WIDTH = 1000;
+
+function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
+
+function lsGet(key) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
+  catch { return null; }
+}
+function lsSet(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+  catch { return false; }
+}
+function lsDelete(key) { try { localStorage.removeItem(key); } catch {} }
+
+function defaultWalls() {
+  const walls = Array.from({ length: 8 }, (_, i) => ({ id: uid(), number: i + 1, name: `Wall ${i + 1}`, photoCount: 0, isWall: true }));
+  const opens = [
+    { id: uid(), number: null, name: "Open A", label: "Open A", photoCount: 0, isWall: false },
+    { id: uid(), number: null, name: "Open B", label: "Open B", photoCount: 0, isWall: false },
+    { id: uid(), number: null, name: "Open C", label: "Open C", photoCount: 0, isWall: false },
+    { id: uid(), number: null, name: "Open D", label: "Open D", photoCount: 0, isWall: false },
+  ];
+  return [...walls, ...opens];
+}
+
+async function fileToDownscaledDataUrl(file) {
+  if (typeof createImageBitmap === "function") {
+    try {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, MAX_IMG_WIDTH / bitmap.width);
+      const w = Math.round(bitmap.width * scale), h = Math.round(bitmap.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(bitmap, 0, 0, w, h);
+      bitmap.close && bitmap.close();
+      return canvas.toDataURL("image/jpeg", 0.82);
+    } catch (e) { /* fall through */ }
+  }
+  const raw = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  const img = await new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = raw;
+  });
+  if (!img.width || !img.height) throw new Error("Image failed to decode");
+  const scale = Math.min(1, MAX_IMG_WIDTH / img.width);
+  const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
+let tesseractLoadPromise = null;
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve();
+  if (tesseractLoadPromise) return tesseractLoadPromise;
+  tesseractLoadPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Couldn't load the label scanner. Check your connection and try again."));
+    document.head.appendChild(s);
+  });
+  return tesseractLoadPromise;
+}
+
+let tesseractWorkerPromise = null;
+let currentProgressHandler = null;
+async function getTesseractWorker() {
+  await loadTesseract();
+  if (!tesseractWorkerPromise) {
+    tesseractWorkerPromise = Tesseract.createWorker("eng", 1, {
+      logger: (m) => { if (currentProgressHandler && m.status === "recognizing text") currentProgressHandler(m.progress || 0); },
+    });
+  }
+  return tesseractWorkerPromise;
+}
+async function workerRecognize(worker, dataUrl, onFraction) {
+  currentProgressHandler = onFraction || null;
+  try {
+    return await worker.recognize(dataUrl);
+  } finally {
+    currentProgressHandler = null;
+  }
+}
+
+function rotateImageToCanvas(img, degrees, maxWidth) {
+  const rad = (degrees * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(rad)), sin = Math.abs(Math.sin(rad));
+  // Bounding box of the source rectangle after rotation (works for any angle,
+  // and reduces to the old swap-based logic exactly at 0/90/180/270).
+  const rotW = img.width * cos + img.height * sin;
+  const rotH = img.width * sin + img.height * cos;
+  const scale = Math.min(1, maxWidth / rotW);
+  const dw = img.width * scale, dh = img.height * scale;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(rotW * scale));
+  canvas.height = Math.max(1, Math.round(rotH * scale));
+  const ctx = canvas.getContext("2d");
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(rad);
+  ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+  return canvas;
+}
+
+function invertCanvas(sourceCanvas) {
+  const canvas = document.createElement("canvas");
+  canvas.width = sourceCanvas.width; canvas.height = sourceCanvas.height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(sourceCanvas, 0, 0);
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) { d[i] = 255 - d[i]; d[i + 1] = 255 - d[i + 1]; d[i + 2] = 255 - d[i + 2]; }
+  ctx.putImageData(imgData, 0, 0);
+  return canvas;
+}
+
+function extractLinesFromResult(data, ctx, canvasW, canvasH) {
+  const rawLines = (data.lines && data.lines.length ? data.lines : []).length
+    ? data.lines
+    : (data.paragraphs || []).flatMap((p) => p.lines || []);
+  const lines = rawLines
+    .map((ln) => {
+      const text = (ln.text || "").trim();
+      if (!text) return null;
+      const bbox = ln.bbox;
+      let avgLum = null;
+      if (bbox) {
+        const x = Math.max(0, Math.floor(bbox.x0)), y = Math.max(0, Math.floor(bbox.y0));
+        const w = Math.max(1, Math.min(Math.ceil(bbox.x1 - bbox.x0), canvasW - x));
+        const h = Math.max(1, Math.min(Math.ceil(bbox.y1 - bbox.y0), canvasH - y));
+        try {
+          const pixels = ctx.getImageData(x, y, w, h).data;
+          let sum = 0, count = 0;
+          for (let i = 0; i < pixels.length; i += 4) { sum += (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3; count++; }
+          avgLum = count ? sum / count : null;
+        } catch (e) { avgLum = null; }
+      }
+      return { text, avgLum };
+    })
+    .filter(Boolean);
+  if (lines.length === 0 && data.text) {
+    return data.text.split("\n").map((s) => s.trim()).filter(Boolean).map((text) => ({ text, avgLum: null }));
+  }
+  return lines;
+}
+
+async function quickWordScore(worker, canvas) {
+  try {
+    const { data } = await workerRecognize(worker, canvas.toDataURL("image/jpeg", 0.7));
+    const words = (data.words || []).filter((w) => (w.confidence || 0) > 45 && /[A-Za-z0-9]{2,}/.test(w.text || ""));
+    return words.length;
+  } catch (e) { return -1; }
+}
+
+async function loadImageSource(file) {
+  if (typeof createImageBitmap === "function") {
+    try { return await createImageBitmap(file, { imageOrientation: "from-image" }); }
+    catch (e) {
+      try { return await createImageBitmap(file); } catch (e2) { /* fall through to Image path */ }
+    }
+  }
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Couldn't read that photo."));
+    reader.readAsDataURL(file);
+  });
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = () => reject(new Error("Couldn't read that photo."));
+    im.src = dataUrl;
+  });
+}
+
+async function scanLabelText(file, onProgress, onDebugImage) {
+  const worker = await getTesseractWorker();
+  const img = await loadImageSource(file);
+  if (!img.width || !img.height) throw new Error("That photo didn't load right — try again.");
+
+  try {
+    // Quickly test all 4 orientations at low resolution to find the upright one,
+    // so people don't have to think about how they held the phone.
+    if (onProgress) onProgress(5);
+    const rotations = [0, 90, 180, 270];
+    let bestRotation = 0, bestScore = -1;
+    for (let i = 0; i < rotations.length; i++) {
+      const deg = rotations[i];
+      const smallCanvas = rotateImageToCanvas(img, deg, 700);
+      const score = await quickWordScore(worker, smallCanvas);
+      if (score > bestScore) { bestScore = score; bestRotation = deg; }
+      if (onProgress) onProgress(5 + Math.round(((i + 1) / rotations.length) * 12));
+    }
+
+    // Fine-tune around the best cardinal angle to handle a photo that's
+    // crooked, not just sideways/upside-down (e.g. a hand-held shot of a
+    // label at a 20-30° tilt, which no multiple of 90° can fix on its own).
+    const fineOffsets = [-35, -30, -25, -20, -15, -10, -5, 5, 10, 15, 20, 25, 30, 35];
+    for (let i = 0; i < fineOffsets.length; i++) {
+      const deg = bestRotation + fineOffsets[i];
+      const smallCanvas = rotateImageToCanvas(img, deg, 700);
+      const score = await quickWordScore(worker, smallCanvas);
+      if (score > bestScore) { bestScore = score; bestRotation = deg; }
+      if (onProgress) onProgress(17 + Math.round(((i + 1) / fineOffsets.length) * 13));
+    }
+
+    // Full-resolution canvas at the winning rotation — used both for OCR and for
+    // sampling background luminance (black-bar vs white-bg text detection).
+    const canvas = rotateImageToCanvas(img, bestRotation, 1600);
+    const ctx = canvas.getContext("2d");
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+    if (onDebugImage) onDebugImage(dataUrl, bestRotation, bestScore);
+
+    const passA = await workerRecognize(worker, dataUrl, (frac) => { if (onProgress) onProgress(30 + Math.round(frac * 40)); });
+    const linesA = extractLinesFromResult(passA.data, ctx, canvas.width, canvas.height);
+
+    // If the normal pass already caught both target fields, skip the (slower)
+    // inverted pass entirely — most labels don't need it.
+    const checkA = extractPoAndInstallAt(linesA);
+    if (checkA.po && checkA.installAt) {
+      if (onProgress) onProgress(100);
+      return linesA;
+    }
+
+    const invertedDataUrl = invertCanvas(canvas).toDataURL("image/jpeg", 0.9);
+    const passB = await workerRecognize(worker, invertedDataUrl, (frac) => { if (onProgress) onProgress(70 + Math.round(frac * 30)); });
+    const linesB = extractLinesFromResult(passB.data, ctx, canvas.width, canvas.height);
+    if (onProgress) onProgress(100);
+
+    // Merge + dedupe (case-insensitive, whitespace-normalized) across both passes.
+    const seen = new Set();
+    const merged = [];
+    [...linesA, ...linesB].forEach((l) => {
+      const key = l.text.toLowerCase().replace(/\s+/g, " ").trim();
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      merged.push(l);
+    });
+    return merged;
+  } finally {
+    if (img.close) img.close();
+  }
+}
+
+// Isolate exactly two fields off a shipping label:
+//  - P.O. number: sits in a black bar with white text, labeled "PO:" (not "REF PO:" / "MO/PO:")
+//  - Install At: plain black-on-white text, labeled "INSTALL AT:"
+function extractPoAndInstallAt(lines) {
+  const DARK = 110, LIGHT = 150;
+
+  function pick(candidates, preferDark) {
+    if (candidates.length === 0) return null;
+    const withLum = candidates.filter((c) => c.avgLum != null);
+    let sorted = preferDark
+      ? withLum.filter((c) => c.avgLum < DARK).sort((a, b) => a.avgLum - b.avgLum)
+      : withLum.filter((c) => c.avgLum > LIGHT).sort((a, b) => b.avgLum - a.avgLum);
+    return (sorted[0] || withLum[0] || candidates[0]);
+  }
+
+  const poCandidates = lines.filter(
+    (l) => /\bP\.?\s*O\.?\s*:/i.test(l.text) && !/REF\s*P\.?\s*O/i.test(l.text) && !/MO\s*\/?\s*P\.?\s*O/i.test(l.text)
+  );
+  const poLine = pick(poCandidates, true);
+  let po = null;
+  if (poLine) {
+    const afterLabel = poLine.text.replace(/^.*?\bP\.?\s*O\.?\s*:\s*/i, "").trim();
+    const tokenMatch = afterLabel.match(/^[A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)*/);
+    po = tokenMatch ? tokenMatch[0] : afterLabel;
+  }
+
+  const installCandidates = lines.filter((l) => /\bINSTALL\s*AT\s*:/i.test(l.text));
+  const installLine = pick(installCandidates, false);
+  let installAt = null;
+  if (installLine) {
+    installAt = installLine.text.replace(/^.*?\bINSTALL\s*AT\s*:\s*/i, "").trim();
+  }
+
+  return { po, installAt };
+}
+
+// ---------------------------------------------------------------------
+// tiny DOM helper
+// ---------------------------------------------------------------------
+function openFilePicker(inputId, wantCamera) {
+  const input = document.getElementById(inputId);
+  if (wantCamera) input.setAttribute("capture", "environment");
+  else input.removeAttribute("capture");
+  input.click();
+}
+
+function el(tag, props = {}, children = []) {
+  const e = document.createElement(tag);
+  Object.entries(props).forEach(([k, v]) => {
+    if (k === "style") Object.assign(e.style, v);
+    else if (k.startsWith("on") && typeof v === "function") e.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k === "class") e.className = v;
+    else if (k === "html") e.innerHTML = v;
+    else if (v !== undefined && v !== null) e.setAttribute(k, v);
+  });
+  (Array.isArray(children) ? children : [children]).forEach((c) => {
+    if (c === null || c === undefined || c === false) return;
+    e.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+  });
+  return e;
+}
+function icon(pathD, size = 18) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("width", size); svg.setAttribute("height", size);
+  svg.setAttribute("fill", "none"); svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2"); svg.setAttribute("stroke-linecap", "round"); svg.setAttribute("stroke-linejoin", "round");
+  svg.innerHTML = pathD;
+  return svg;
+}
+const ICONS = {
+  camera: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>',
+  back: '<path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>',
+  x: '<path d="M18 6L6 18"/><path d="M6 6l12 12"/>',
+  trash: '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
+  check: '<path d="M20 6L9 17l-5-5"/>',
+  pin: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+};
+
+// ---------------------------------------------------------------------
+// state
+// ---------------------------------------------------------------------
+let state = {
+  view: "home",
+  wallsIndex: [],
+  wallPhotoIds: {},
+  photosById: {},
+  activeWallId: null,
+  activePhotoId: null,
+  locationsQuery: null,
+  pendingHighlight: null,
+  colorFilter: null,
+  searchQuery: "",
+};
+
+
+// ---------------------------------------------------------------------
+// Synthetic test dataset (100 jobs / 500 items / 8 walls, with deliberate
+// messy-reality problems: duplicate customer names, multi-wall jobs,
+// overflow items, missing scans, old-stock flags). For stress-testing
+// search/map/data-handling against realistic volume — not real inventory.
+// ---------------------------------------------------------------------
+const RACK_PLACEHOLDER_IMG = "data:image/jpeg;base64,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";
+const TEST_SEED_DATA = {"wallsIndex": [{"id": "68bcd498d763", "number": 1, "name": "Wall 1", "photoCount": 11}, {"id": "107137d6494e", "number": 2, "name": "Wall 2", "photoCount": 10}, {"id": "1019f8c30586", "number": 3, "name": "Wall 3", "photoCount": 6}, {"id": "32c3544700b6", "number": 4, "name": "Wall 4", "photoCount": 9}, {"id": "5e38613a2660", "number": 5, "name": "Wall 5", "photoCount": 8}, {"id": "ec9a3adeb8be", "number": 6, "name": "Wall 6", "photoCount": 8}, {"id": "66d3fe1e0ed8", "number": 7, "name": "Wall 7", "photoCount": 6}, {"id": "82527d7d602c", "number": 8, "name": "Wall 8", "photoCount": 7}], "wallsById": {"68bcd498d763": {"id": "68bcd498d763", "photoIds": ["2e235643840e", "e73f0fe6cde6", "8c177a837761", "3381563d4c73", "938395b5ca45", "6944d9f70215", "257336c75bd8", "3aecfb2b3c2f", "c50e5e16b88c", "91cc1563e627", "e5e221721efb"]}, "107137d6494e": {"id": "107137d6494e", "photoIds": ["2444b0e8718a", "741cec2279af", "122ae959f97e", "4d27062d5f5f", "7e673adf2892", "07f93a8a7b34", "feaedbbe8284", "dba50fe27d4b", "fc3309467a3d", "c7d69d4fa8d0"]}, "1019f8c30586": {"id": "1019f8c30586", "photoIds": ["6c8902f35c4b", "0f758ca361d5", "41fc1a1c6c48", "b7fffd5b3d8f", "456856ea7a04", "ec47bf377b3d"]}, "32c3544700b6": {"id": "32c3544700b6", "photoIds": ["6afc63bc46c5", "56d872a8b64a", "653be4d75802", "f34f1b3c2d75", "eb480aefc224", "39a646f4480d", "14b62ac0e397", "7a28cd7efddf", "bdbce858d726"]}, "5e38613a2660": {"id": "5e38613a2660", "photoIds": ["198c05a4a7ce", "63edd0237c88", "709be5f3ef8b", "0619650f9ea6", "9ab236ad1e62", "3c918a75d6da", "e4df062457e1", "6290393c7ae7"]}, "ec9a3adeb8be": {"id": "ec9a3adeb8be", "photoIds": ["5a76a274b69f", "914b2b9f2084", "925c42729283", "a8624650828a", "e5f6300e5925", "1e6572620f24", "c6693679e412", "46b9d2a08461"]}, "66d3fe1e0ed8": {"id": "66d3fe1e0ed8", "photoIds": ["c9b0a04ab2b4", "1f89f2025f6d", "76016506f65a", "1c3ca671b7af", "6fa13171898a", "9d4897eb2c64"]}, "82527d7d602c": {"id": "82527d7d602c", "photoIds": ["0c200a7be6b1", "d13a662192a2", "a1a0678c9123", "12f88d906ac9", "53490e38b5d9", "168fe1e4c483", "d60f3b683d02"]}}, "photosById": {"2e235643840e": {"id": "2e235643840e", "wallId": "68bcd498d763", "dataUrl": "__RACK_PLACEHOLDER__", "division": "A", "sectionNum": 1, "label": "", "markers": []}, "e73f0fe6cde6": {"id": "e73f0fe6cde6", "wallId": "68bcd498d763", "dataUrl": "__RACK_PLACEHOLDER__", "division": "A", "sectionNum": 2, "label": "", "markers": [{"id": "7b94497fbc59", "xPct": 34.5, "yPct": 38.4, "color": "#2F80ED", "size": "S", "po": "1N10574.086.07", "jobName": "Garcia Construction", "notes": "Lounge Chair", "status": "active", "createdAt": 1783484466983}]}, "8c177a837761": {"id": "8c177a837761", "wallId": "68bcd498d763", "dataUrl": "__RACK_PLACEHOLDER__", "division": "C", "sectionNum": 3, "label": "", "markers": [{"id": "b61706f1b6d8", "xPct": 70.6, "yPct": 48.0, "color": "#E84393", "size": "M", "po": "1N10007.041.04", "jobName": "Johnson Remodel", "notes": "Executive Chair", "status": "completed", "createdAt": 1766709113480}, {"id": "fb8e2f5bbe0b", "xPct": 75.9, "yPct": 42.8, "color": "#17A398", "size": "L", "po": "1N10378.097.04", "jobName": "Martinez LLC", "notes": "Bookcase", "status": "completed", "createdAt": 1777156523319}, {"id": "98ef9e9b265e", "xPct": 42.8, "yPct": 35.7, "color": "#8E44AD", "size": "S", "po": "1N10553.059.03", "jobName": "Garcia Interiors", "notes": "Conference Table", "status": "active", "createdAt": 1784794227042}, {"id": "97ba33fcf683", "xPct": 82.8, "yPct": 20.3, "color": "#8E44AD", "size": "S", "po": "1N10553.059.03", "jobName": "Garcia Interiors", "notes": "Task Chair", "status": "active", "createdAt": 1784794227042}]}, "3381563d4c73": {"id": "3381563d4c73", "wallId": "68bcd498d763", "dataUrl": "__RACK_PLACEHOLDER__", "division": "B", "sectionNum": 4, "label": "", "markers": [{"id": "d59f195624c9", "xPct": 89.1, "yPct": 65.7, "color": "#17A398", "size": "M", "po": "1N10378.097.04", "jobName": "Martinez LLC", "notes": "Reception Desk", "status": "completed", "createdAt": 1777156523319}, {"id": "f555a842b0f7", "xPct": 55.9, "yPct": 87.6, "color": "#2E8B57", "size": "L", "po": "1N10686.011.03", "jobName": "Desert Sun Offices", "notes": "Conference Table", "status": "active", "createdAt": 1783950515775}]}, "938395b5ca45": {"id": "938395b5ca45", "wallId": "68bcd498d763", "dataUrl": "__RACK_PLACEHOLDER__", "division": "A", "sectionNum": 5, "label": "", "markers": [{"id": "5464b49d7ebd", "xPct": 69.8, "yPct": 79.8, "color": "#2F80ED", "size": "L", "po": "1N10574.086.07", "jobName": "Garcia Construction", "notes": "Reception Desk", "status": "active", "createdAt": 1783484466983}, {"id": "0980e2f33639", "xPct": 29.8, "yPct": 38.3, "color": "#2F80ED", "size": "L", "po": "1N10616.016.04", "jobName": "Los Alamos National Labs - Annex", "notes": "Bookcase", "status": "completed", "createdAt": 1781000084856}, {"id": "0c243ac323a7", "xPct": 15.6, "yPct": 9.2, "color": "#D64545", "size": "S", "po": "1N10651.044.03", "jobName": "Garcia Construction", "notes": "Conference Table", "status": "completed", "createdAt": 1779077437706}]}, "6944d9f70215": {"id": "6944d9f70215", "wallId": "68bcd498d763", "dataUrl": "__RACK_PLACEHOLDER__", "division": "A", "sectionNum": 6, "label": "", "markers": []}, "257336c75bd8": {"id": "257336c75bd8", "wallId": "68bcd498d763", "dataUrl": "__RACK_PLACEHOLDER__", "division": "A", "sectionNum": 7, "label": "", "markers": [{"id": "57e723e31e52", "xPct": 24.8, "yPct": 39.3, "color": "#E84393", "size": "S", "po": "1N10427.082.05", "jobName": "Bernalillo County Admin", "notes": "OLD STOCK - flagged 2025 inventory, verify still needed; Monitor Arm", "status": "active", "createdAt": 1780747250997}]}, "3aecfb2b3c2f": {"id": "3aecfb2b3c2f", "wallId": "68bcd498d763", "dataUrl": "__RACK_PLACEHOLDER__", "division": "C", "sectionNum": 8, "label": "", "markers": [{"id": "78f9b279a4c4", "xPct": 59.1, "yPct": 13.5, "color": "#E84393", "size": "M", "po": "1N10007.041.04", "jobName": "Johnson Remodel", "notes": "Bookcase", "status": "completed", "createdAt": 1766709113480}, {"id": "53ea04c8e359", "xPct": 24.2, "yPct": 17.5, "color": "#E84393", "size": "S", "po": "1N10133.025.09", "jobName": "Furniture Marketing Group AI", "notes": "Lateral File", "status": "completed", "createdAt": 1782495373256}, {"id": "cba47f998448", "xPct": 78.0, "yPct": 9.9, "color": "#8E44AD", "size": "S", "po": "1N10553.059.03", "jobName": "Garcia Interiors", "notes": "Whiteboard", "status": "active", "createdAt": 1784794227042}]}, "c50e5e16b88c": {"id": "c50e5e16b88c", "wallId": "68bcd498d763", "dataUrl": "__RACK_PLACEHOLDER__", "division": "A", "sectionNum": 9, "label": "", "markers": [{"id": "0c4b9ef43551", "xPct": 11.6, "yPct": 73.8, "color": "#E84393", "size": "L", "po": "1N10007.041.04", "jobName": "Johnson Remodel", "notes": "Credenza", "status": "completed", "createdAt": 1766709113480}, {"id": "dd064f3dfa91", "xPct": 79.2, "yPct": 43.8, "color": "#E84393", "size": "S", "po": "1N10007.041.04", "jobName": "Johnson Remodel", "notes": "OLD STOCK - flagged 2025 inventory, verify still needed; Cubicle Panel", "status": "completed", "createdAt": 1766709113480}, {"id": "e810d6abb997", "xPct": 75.8, "yPct": 42.1, "color": "#E8590C", "size": "M", "po": "1N10091.067.08", "jobName": "Furniture Marketing Group AI", "notes": "Lounge Chair", "status": "completed", "createdAt": 1777016719446}, {"id": "1619e7f23acf", "xPct": 62.1, "yPct": 25.8, "color": "#8E44AD", "size": "S", "po": "1N10553.059.03", "jobName": "Garcia Interiors", "notes": "Monitor Arm", "status": "active", "createdAt": 1784794227042}]}, "91cc1563e627": {"id": "91cc1563e627", "wallId": "68bcd498d763", "dataUrl": "__RACK_PLACEHOLDER__", "division": "C", "sectionNum": 10, "label": "", "markers": [{"id": "2101cfc6f315", "xPct": 52.6, "yPct": 46.1, "color": "#E84393", "size": "L", "po": "1N10007.041.04", "jobName": "Johnson Remodel", "notes": "Credenza", "status": "completed", "createdAt": 1766709113480}, {"id": "7ceca7082f29", "xPct": 88.7, "yPct": 16.2, "color": "#2E8B57", "size": "L", "po": "", "jobName": "Desert Sun Offices", "notes": "Conference Table", "status": "active", "createdAt": 1783950515775}]}, "e5e221721efb": {"id": "e5e221721efb", "wallId": "68bcd498d763", "dataUrl": "__RACK_PLACEHOLDER__", "division": "C", "sectionNum": 11, "label": "", "markers": [{"id": "f5906350ae95", "xPct": 8.6, "yPct": 40.2, "color": "#E84393", "size": "M", "po": "1N10133.025.09", "jobName": "Furniture Marketing Group AI", "notes": "Conference Table", "status": "completed", "createdAt": 1782495373256}, {"id": "75453fc77e8f", "xPct": 35.3, "yPct": 50.9, "color": "#2F80ED", "size": "L", "po": "1N10616.016.04", "jobName": "Los Alamos National Labs - Annex", "notes": "Bookcase", "status": "completed", "createdAt": 1781000084856}]}, "2444b0e8718a": {"id": "2444b0e8718a", "wallId": "107137d6494e", "dataUrl": "__RACK_PLACEHOLDER__", "division": "A", "sectionNum": 1, "label": "", "markers": [{"id": "09411b13620e", "xPct": 42.5, "yPct": 81.4, "color": "#17A398", "size": "M", "po": "1N10014.018.04", "jobName": "Furniture Marketing Group AI", "notes": "Executive Chair", "status": "completed", "createdAt": 1766550853044}, {"id": "25272c8ac590", "xPct": 50.6, "yPct": 21.0, "color": "#17A398", "size": "M", "po": "1N10014.018.04", "jobName": "Furniture Marketing Group AI", "notes": "Credenza", "status": "completed", "createdAt": 1766550853044}, {"id": "129e79c09429", "xPct": 30.9, "yPct": 63.6, "color": "#17A398", "size": "M", "po": "1N10014.018.04", "jobName": "Furniture Marketing Group AI", "notes": "Executive Chair", "status": "completed", "createdAt": 1766550853044}, {"id": "8738135eb3bb", "xPct": 90.2, "yPct": 62.3, "color": "#D64545", "size": "M", "po": "1N10154.022.07", "jobName": "Furniture Marketing Group AI", "notes": "Whiteboard", "status": "active", "createdAt": 1780555412381}, {"id": "7951881a64d9", "xPct": 61.5, "yPct": 67.0, "color": "#8E44AD", "size": "S", "po": "1N10189.006.02", "jobName": "Johnson Remodel", "notes": "Task Chair", "status": "completed", "createdAt": 1768566592633}, {"id": "2c6ecddd0d9b", "xPct": 56.8, "yPct": 56.3, "color": "#17A398", "size": "M", "po": "1N10210.028.09", "jobName": "Sandia Office Solutions", "notes": "Monitor Arm", "status": "completed", "createdAt": 1738173419841}, {"id": "f888b28c3892", "xPct": 41.4, "yPct": 32.1, "color": "#2E8B57", "size": "L", "po": "1N10280.096.03", "jobName": "", "notes": "Lounge Chair", "status": "active", "createdAt": 1779345096048}, {"id": "5e20f3641582", "xPct": 13.8, "yPct": 47.1, "color": "#8E44AD", "size": "M", "po": "1N10294.090.02", "jobName": "Titan Development", "notes": "Reception Desk", "status": "completed", "createdAt": 1781612730654}, {"id": "1665f7cd57b9", "xPct": 62.2, "yPct": 14.1, "color": "#2F80ED", "size": "L", "po": "1N10539.073.01", "jobName": "Bernalillo County Admin", "notes": "Cubicle Panel", "status": "active", "createdAt": 1782861453215}]}, "741cec2279af": {"id": "741cec2279af", "wallId": "107137d6494e", "dataUrl": "__RACK_PLACEHOLDER__", "division": "C", "sectionNum": 2, "label": "", "markers": [{"id": "0ebf519b3e88", "xPct": 70.1, "yPct": 76.2, "color": "#17A398", "size": "L", "po": "1N10014.018.04", "jobName": "Furniture Marketing Group AI", "notes": "Sofa", "status": "completed", "createdAt": 1766550853044}, {"id": "696c2c0e812f", "xPct": 87.0, "yPct": 19.9, "color": "#17A398", "size": "M", "po": "1N10210.028.09", "jobName": "Sandia Office Solutions", "notes": "Table Base", "status": "completed", "createdAt": 1738173419841}, {"id": "6b8a471fb45e", "xPct": 21.1, "yPct": 35.4, "color": "#2E8B57", "size": "L", "po": "1N10280.096.03", "jobName": "Los Alamos National Labs - Annex", "notes": "Lounge Chair", "status": "active", "createdAt": 1779345096048}, {"id": "6c5ce7a49124", "xPct": 12.9, "yPct": 15.2, "color": "#2E8B57", "size": "M", "po": "1N10280.096.03", "jobName": "Los Alamos National Labs - Annex", "notes": "Conference Table", "status": "active", "createdAt": 1779345096048}, {"id": "bc751e5763d0", "xPct": 63.3, "yPct": 22.8, "color": "#2E8B57", "size": "S", "po": "1N10280.096.03", "jobName": "Los Alamos National Labs - Annex", "notes": "Sofa", "status": "active", "createdAt": 1779345096048}]}, "122ae959f97e": {"id": "122ae959f97e", "wallId": "107137d6494e", "dataUrl": "__RACK_PLACEHOLDER__", "division": "B", "sectionNum": 3, "label": "", "markers": [{"id": "9990b352723d", "xPct": 73.1, "yPct": 67.1, "color": "#17A398", "size": "S", "po": "1N10084.070.04", "jobName": "Martinez Installs", "notes": "Lateral File", "status": "active", "createdAt": 1769666046485}, {"id": "635e741183d7", "xPct": 51.5, "yPct": 33.5, "color": "#17A398", "size": "S", "po": "1N10084.070.04", "jobName": "Martinez Installs", "notes": "Executive Chair", "status": "active", "createdAt": 1769666046485}, {"id": "9e2c5253f6f6", "xPct": 68.5, "yPct": 58.8, "color": "#17A398", "size": "L", "po": "1N10084.070.04", "jobName": "Martinez Installs", "notes": "Credenza", "status": "active", "createdAt": 1769666046485}, {"id": "05d30d9764c8", "xPct": 33.1, "yPct": 55.4, "color": "#8E44AD", "size": "L", "po": "1N10189.006.02", "jobName": "Johnson Remodel", "notes": "Executive Chair", "status": "completed", "createdAt": 1768566592633}, {"id": "8471764c6495", "xPct": 84.4, "yPct": 82.1, "color": "#F4B400", "size": "M", "po": "", "jobName": "Smith Furniture", "notes": "Sofa", "status": "active", "createdAt": 1781156635931}, {"id": "725e6dc90ad3", "xPct": 8.7, "yPct": 62.6, "color": "#D64545", "size": "M", "po": "1N10266.056.03", "jobName": "City of Albuquerque - Facilities", "notes": "Credenza", "status": "completed", "createdAt": 1771718255987}, {"id": "69be3661fc95", "xPct": 51.4, "yPct": 77.1, "color": "#2E8B57", "size": "M", "po": "1N10280.096.03", "jobName": "Los Alamos National Labs - Annex", "notes": "Monitor Arm", "status": "active", "createdAt": 1779345096048}, {"id": "af5e539672e0", "xPct": 70.2, "yPct": 43.2, "color": "#8E44AD", "size": "M", "po": "1N10294.090.02", "jobName": "Titan Development", "notes": "Sofa", "status": "completed", "createdAt": 1781612730654}]}, "4d27062d5f5f": {"id": "4d27062d5f5f", "wallId": "107137d6494e", "dataUrl": "__RACK_PLACEHOLDER__", "division": "A", "sectionNum": 4, "label": "", "markers": [{"id": "f2341cbac3a5", "xPct": 72.1, "yPct": 56.2, "color": "#17A398", "size": "M", "po": "1N10014.018.04", "jobName": "Furniture Marketing Group AI", "notes": "Executive Chair", "status": "completed", "createdAt": 1766550853044}, {"id": "842a133458d6", "xPct": 89.9, "yPct": 13.7, "color": "#E84393", "size": "L", "po": "1N10063.077.06", "jobName": "Titan Development", "notes": "Monitor Arm", "status": "active", "createdAt": 1779674056233}, {"id": "aa9fe76dc328", "xPct": 59.6, "yPct": 15.8, "color": "#17A398", "size": "L", "po": "1N10084.070.04", "jobName": "Martinez Installs", "notes": "Lateral File", "status": "active", "createdAt": 1769666046485}, {"id": "eb298162e70f", "xPct": 30.8, "yPct": 85.6, "color": "#8E44AD", "size": "L", "po": "1N10189.006.02", "jobName": "Johnson Remodel", "notes": "Cubicle Panel", "status": "completed", "createdAt": 1768566592633}, {"id": "f7a93e900c2a", "xPct": 59.3, "yPct": 44.0, "color": "#E8590C", "size": "L", "po": "1N10231.018.05", "jobName": "Rio Grande Credit Union", "notes": "Sofa", "status": "active", "createdAt": 1779472135953}, {"id": "8abea9c2b3c0", "xPct": 56.5, "yPct": 55.6, "color": "#F4B400", "size": "M", "po": "1N10259.015.02", "jobName": "Smith Furniture", "notes": "Monitor Arm", "status": "active", "createdAt": 1781156635931}, {"id": "4c7b0b5eb060", "xPct": 47.6, "yPct": 40.2, "color": "#8E44AD", "size": "S", "po": "", "jobName": "Titan Development", "notes": "Task Chair", "status": "completed", "createdAt": 1781612730654}, {"id": "7fed1c6a7c28", "xPct": 56.0, "yPct": 18.0, "color": "#8E44AD", "size": "L", "po": "1N10294.090.02", "jobName": "Titan Development", "notes": "Executive Chair", "status": "completed", "createdAt": 1781612730654}, {"id": "a1a75b809817", "xPct": 54.1, "yPct": 10.2, "color": "#17A398", "size": "M", "po": "1N10630.013.04", "jobName": "Bernalillo County Admin", "notes": "Cubicle Panel", "status": "completed", "createdAt": 1756519623529}]}, "7e673adf2892": {"id": "7e673adf2892", "wallId": "107137d6494e", "dataUrl": "__RACK_PLACEHOLDER__", "division": "A", "sectionNum": 5, "label": "", "markers": [{"id": "fe9c07b9f796", "xPct": 37.5, "yPct": 23.2, "color": "#17A398", "size": "S", "po": "1N10014.018.04", "jobName": "Furniture Marketing Group AI", "notes": "OVERFLOW - not in assigned bay, check floor near dock; Bookcase", "status": "completed", "createdAt": 1766550853044}, {"id": "d9669e6ce870", "xPct": 74.3, "yPct": 62.4, "color": "#17A398", "size": "S", "po": "1N10042.044.02", "jobName": "Rio Grande Credit Union", "notes": "Task Chair", "status": "active", "createdAt": 1779709426427}, {"id": "4d18f483396b", "xPct": 74.7, "yPct": 46.4, "color": "#E84393", "size": "S", "po": "1N10063.077.06", "jobName": "Titan Development", "notes": "Whiteboard", "status": "active", "createdAt": 1779674056233}, {"id": "2fe0e9130881", "xPct": 34.4, "yPct": 88.8, "color": "#8E44AD", "size": "L", "po": "1N10189.006.02", "jobName": "Johnson Remodel", "notes": "OLD STOCK - flagged 2025 inventory, verify still needed; Table Base", "status": "completed", "createdAt": 1768566592633}, {"id": "1309b30ce98b", "xPct": 32.5, "yPct": 73.9, "color": "#8E44AD", "size": "L", "po": "1N10294.090.02", "jobName": "Titan Development", "notes": "OLD STOCK - flagged 2025 inventory, verify still needed; Conference Table", "status": "completed", "createdAt": 1781612730654}, {"id": "959b385edeb0", "xPct": 58.3, "yPct": 53.7, "color": "#17A398", "size": "M", "po": "1N10567.032.02", "jobName": "Sandia Office Solutions", "notes": "Lateral File", "status": "completed", "createdAt": 1775475615658}, {"id": "78c9d7f922e1", "xPct": 88.9, "yPct": 24.7, "color": "#2F80ED", "size": "L", "po": "1N10616.016.04", "jobName": "Los Alamos National Labs - Annex", "notes": "Whiteboard", "status": "completed", "createdAt": 1781000084856}]}, "07f93a8a7b34": {"id": "07f93a8a7b34", "wallId": "107137d6494e", "dataUrl": "__RACK_PLACEHOLDER__", "division": "A", "sectionNum": 6, "label": "", "markers": [{"id": "e2a1f5a65430", "xPct": 83.2, "yPct": 79.1, "color": "#17A398", "size": "M", "po": "1N10084.070.04", "jobName": "Martinez Installs", "notes": "Monitor Arm", "status": "active", "createdAt": 1769666046485}, {"id": "b771157d34e4", "xPct": 62.4, "yPct": 64.9, "color": "#17A398", "size": "S", "po": "", "jobName": "Sandia Office Solutions", "notes": "Bookcase", "status": "completed", "createdAt": 1738173419841}, {"id": "54024277e030", "xPct": 73.8, "yPct": 46.6, "color": "#F4B400", "size": "S", "po": "1N10259.015.02", "jobName": "Smith Furniture", "notes": "Whiteboard", "status": "active", "createdAt": 1781156635931}, {"id": "d2e054b8fe49", "xPct": 12.4, "yPct": 60.6, "color": "#D64545", "size": "L", "po": "1N10266.056.03", "jobName": "City of Albuquerque - Facilities", "notes": "Sit-Stand Desk", "status": "completed", "createdAt": 1771718255987}, {"id": "c734290d642b", "xPct": 46.9, "yPct": 74.5, "color": "#D64545", "size": "M", "po": "1N10651.044.03", "jobName": "Garcia Construction", "notes": "Bookcase", "status": "completed", "createdAt": 1779077437706}]}, "feaedbbe8284": {"id": "feaedbbe8284", "wallId": "107137d6494e", "dataUrl": "__RACK_PLACEHOLDER__", "division": "A", "sectionNum": 7, "label": "", "markers": [{"id": "0642480edd80", "xPct": 39.4, "yPct": 20.8, "color": "#17A398", "size": "M", "po": "1N10014.018.04", "jobName": "Furniture Marketing Group AI", "notes": "Lateral File", "status": "completed", "createdAt": 1766550853044}, {"id": "ccd71b2cd994", "xPct": 73.3, "yPct": 55.7, "color": "#17A398", "size": "S", "po": "1N10014.018.04", "jobName": "Furniture Marketing Group AI", "notes": "Bookcase", "status": "completed", "createdAt": 1766550853044}, {"id": "11cf4bcd3850", "xPct": 38.7, "yPct": 41.6, "color": "#E8590C", "size": "L", "po": "1N10105.005.06", "jobName": "Johnson Remodel", "notes": "Reception Desk", "status": "completed", "createdAt": 1777986511051}, {"id": "44428ba112e4", "xPct": 77.1, "yPct": 39.5, "color": "#F4B400", "size": "L", "po": "1N10518.092.02", "jobName": "Titan Development", "notes": "OLD STOCK - flagged 2025 inventory, verify still needed; Monitor Arm", "status": "active", "createdAt": 1784242935719}, {"id": "4e2aeeb179c1", "xPct": 44.0, "yPct": 86.8, "color": "#17A398", "size": "M", "po": "1N10567.032.02", "jobName": "Sandia Office Solutions", "notes": "Monitor Arm", "status": "completed", "createdAt": 1775475615658}, {"id": "2a3b177f7760", "xPct": 66.5, "yPct": 16.2, "color": "#17A398", "size": "S", "po": "1N10567.032.02", "jobName": "Sandia Office Solutions", "notes": "Table Base", "status": "completed", "createdAt": 1775475615658}]}, "dba50fe27d4b": {"id": "dba50fe27d4b", "wallId": "107137d6494e", "dataUrl": "__RACK_PLACEHOLDER__", "division": "A", "sectionNum": 8, "label": "", "markers": [{"id": "368a5af9934d", "xPct": 32.5, "yPct": 8.1, "color": "#E84393", "size": "M", "po": "", "jobName": "Titan Development", "notes": "Sit-Stand Desk", "status": "active", "createdAt": 1779674056233}, {"id": "737d662b4efe", "xPct": 64.1, "yPct": 67.6, "color": "#17A398", "size": "L", "po": "1N10084.070.04", "jobName": "Martinez Installs", "notes": "Bookcase", "status": "active", "createdAt": 1769666046485}, {"id": "4eccfb20aeca", "xPct": 18.5, "yPct": 34.6, "color": "#17A398", "size": "S", "po": "1N10084.070.04", "jobName": "Martinez Installs", "notes": "Executive Chair", "status": "active", "createdAt": 1769666046485}, {"id": "c6fae9ebae21", "xPct": 73.5, "yPct": 61.7, "color": "#17A398", "size": "S", "po": "1N10084.070.04", "jobName": "Martinez Installs", "notes": "Table Base", "status": "active", "createdAt": 1769666046485}, {"id": "c6c88c016701", "xPct": 46.8, "yPct": 75.8, "color": "#F4B400", "size": "L", "po": "1N10147.097.04", "jobName": "Johnson Cabinets", "notes": "Monitor Arm", "status": "active", "createdAt": 1738184858332}, {"id": "f7911d5d7065", "xPct": 89.8, "yPct": 83.2, "color": "#8E44AD", "size": "S", "po": "1N10189.006.02", "jobName": "Johnson Remodel", "notes": "Table Base", "status": "completed", "createdAt": 1768566592633}, {"id": "4203724a99d3", "xPct": 62.9, "yPct": 28.8, "color": "#E8590C", "size": "S", "po": "1N10231.018.05", "jobName": "Rio Grande Credit Union", "notes": "Table Base", "status": "active", "createdAt": 1779472135953}, {"id": "a1e99fb71f7b", "xPct": 91.5, "yPct": 73.2, "color": "#E8590C", "size": "S", "po": "1N10231.018.05", "jobName": "Rio Grande Credit Union", "notes": "Table Base", "status": "active", "createdAt": 1779472135953}, {"id": "e9168653ef44", "xPct": 52.9, "yPct": 26.3, "color": "#F4B400", "size": "M", "po": "1N10259.015.02", "jobName": "Smith Furniture", "notes": "Lounge Chair", "status": "active", "createdAt": 1781156635931}, {"id": "f8a7c69df462", "xPct": 63.7, "yPct": 79.2, "color": "#2F80ED", "size": "L", "po": "1N10539.073.01", "jobName": "Bernalillo County Admin", "notes": "Task Chair", "status": "active", "createdAt": 1782861453215}, {"id": "0e282d323683", "xPct": 83.3, "yPct": 73.1, "color": "#17A398", "size": "L", "po": "1N10567.032.02", "jobName": "Sandia Office Solutions", "notes": "Task Chair", "status": "completed", "createdAt": 1775475615658}, {"id": "9a8011d4bf39", "xPct": 88.4, "yPct": 80.9, "color": "#2F80ED", "size": "L", "po": "1N10616.016.04", "jobName": "Los Alamos National Labs - Annex", "notes": "Whiteboard", "status": "completed", "createdAt": 1781000084856}]}, "fc3309467a3d": {"id": "fc3309467a3d", "wallId": "107137d6494e", "dataUrl": "__RACK_PLACEHOLDER__", "division": "C", "sectionNum": 9, "label": "", "markers": [{"id": "582a58a19632", "xPct": 42.8, "yPct": 77.5, "color": "#17A398", "size": "M", "po": "1N10014.018.04", "jobName": "Furniture Marketing Group AI", "notes": "Conference Table", "status": "completed", "createdAt": 1766550853044}, {"id": "d78275516f2d", "xPct": 54.8, "yPct": 59.2, "color": "#17A398", "size": "L", "po": "1N10014.018.04", "jobName": "Furniture Marketing Group AI", "notes": "Whiteboard", "status": "completed", "createdAt": 1766550853044}, {"id": "a624e8ed77d2", "xPct": 51.9, "yPct": 21.3, "color": "#17A398", "size": "M", "po": "1N10042.044.02", "jobName": "", "notes": "Monitor Arm", "status": "active", "createdAt": 1779709426427}, {"id": "7a2fecbbbd79", "xPct": 81.4, "yPct": 11.7, "color": "#E84393", "size": "M", "po": "1N10063.077.06", "jobName": "Titan Development", "notes": "Reception Desk", "status": "active", "createdAt": 1779674056233}, {"id": "655c275e91fc", "xPct": 85.9, "yPct": 61.6, "color": "#17A398", "size": "M", "po": "1N10084.070.04", "jobName": "Martinez Installs", "notes": "Sofa", "status": "active", "createdAt": 1769666046485}, {"id": "53029508c3f0", "xPct": 74.4, "yPct": 10.2, "color": "#17A398", "size": "L", "po": "1N10084.070.04", "jobName": "Martinez Installs", "notes": "Conference Table", "status": "active", "createdAt": 1769666046485}, {"id": "1aac0ca11c1d", "xPct": 41.0, "yPct": 18.7, "color": "#D64545", "size": "S", "po": "1N10154.022.07", "jobName": "Furniture Marketing Group AI", "notes": "Monitor Arm", "status": "active", "createdAt": 1780555412381}, {"id": "73e3c7fa6dfb", "xPct": 43.5, "yPct": 19.1, "color": "#D64545", "size": "S", "po": "1N10266.056.03", "jobName": "", "notes": "Table Base", "status": "completed", "createdAt": 1771718255987}, {"id": "7b92b04e2edf", "xPct": 53.1, "yPct": 59.7, "color": "#2E8B57", "size": "M", "po": "1N10280.096.03", "jobName": "Los Alamos National Labs - Annex", "notes": "Whiteboard", "status": "active", "createdAt": 1779345096048}, {"id": "8a593f55ccd9", "xPct": 73.0, "yPct": 80.7, "color": "#F4B400", "size": "M", "po": "1N10518.092.02", "jobName": "Titan Development", "notes": "Whiteboard", "status": "active", "createdAt": 1784242935719}, {"id": "47f1fa10cc18", "xPct": 14.3, "yPct": 9.6, "color": "#2F80ED", "size": "L", "po": "1N10539.073.01", "jobName": "Bernalillo County Admin", "notes": "Sofa", "status": "active", "createdAt": 1782861453215}, {"id": "b4a046383bb0", "xPct": 15.1, "yPct": 86.3, "color": "#17A398", "size": "M", "po": "1N10630.013.04", "jobName": "Bernalillo County Admin", "notes": "Sit-Stand Desk", "status": "completed", "createdAt": 1756519623529}]}, "c7d69d4fa8d0": {"id": "c7d69d4fa8d0", "wallId": "107137d6494e", "dataUrl": "__RACK_PLACEHOLDER__", "division": "C", "sectionNum": 10, "label": "", "markers": [{"id": "14b612cd3321", "xPct": 15.7, "yPct": 52.6, "color": "#17A398", "size": "M", "po": "1N10014.018.04", "jobName": "Furniture Marketing Group AI", "notes": "Task Chair", "status": "completed", "createdAt": 1766550853044}, {"id": "7935f1d004e0", "xPct": 29.0, "yPct": 17.5, "color": "#17A398", "size": "L", "po": "1N10084.070.04", "jobName": "Martinez Installs", "notes": "Lateral File", "status": "active", "createdAt": 1769666046485}, {"id": "6e6ebd469dbc", "xPct": 19.4, "yPct": 14.2, "color": "#17A398", "size": "S", "po": "1N10084.070.04", "jobName": "Martinez Installs", "notes": "Executive Chair", "status": "active", "createdAt": 1769666046485}, {"id": "4ec1cc4ce1f3", "xPct": 82.3, "yPct": 13.5, "color": "#17A398", "size": "M", "po": "1N10084.070.04", "jobName": "Martinez Installs", "notes": "Credenza", "status": "active", "createdAt": 1769666046485}, {"id": "2aceee5b03a5", "xPct": 61.7, "yPct": 49.8, "color": "#E8590C", "size": "L", "po": "1N10091.067.08", "jobName": "Furniture Marketing Group AI", "notes": "Credenza", "status": "completed", "createdAt": 1777016719446}, {"id": "01ec06fe8d75", "xPct": 53.5, "yPct": 71.6, "color": "#E8590C", "size": "L", "po": "1N10231.018.05", "jobName": "Rio Grande Credit Union", "notes": "Bookcase", "status": "active", "createdAt": 1779472135953}, {"id": "f5959293cd16", "xPct": 22.2, "yPct": 34.3, "color": "#2F80ED", "size": "S", "po": "1N10539.073.01", "jobName": "Bernalillo County Admin", "notes": "Reception Desk", "status": "active", "createdAt": 1782861453215}]}, "6c8902f35c4b": {"id": "6c8902f35c4b", "wallId": "1019f8c30586", "dataUrl": "__RACK_PLACEHOLDER__", "division": "C", "sectionNum": 1, "label": "", "markers": [{"id": "485c9f3e62a1", "xPct": 86.2, "yPct": 42.9, "color": "#2F80ED", "size": "M", "po": "1N10056.026.03", "jobName": "Garcia Construction", "notes": "Bookcase", "status": "completed", "createdAt": 1782942680748}]}, "0f758ca361d5": {"id": "0f758ca361d5", "wallId": "1019f8c30586", "dataUrl": "__RACK_PLACEHOLDER__", "division": "A", "sectionNum": 2, "label": "", "markers": [{"id": "c69d3061a3fc", "xPct": 28.9, "yPct": 80.7, "color": "#D64545", "size": "S", "po": "1N10098.030.04", "jobName": "", "notes": "Reception Desk", "status": "active", "createdAt": 1785272015927}, {"id": "8f7c0e85f04e", "xPct": 63.5, "yPct": 59.7, "color": "#E84393", "size": "S", "po": "1N10161.090.09", "jobName": "Northgate Business Park", "notes": "Lounge Chair", "status": "active", "createdAt": 1783312968908}, {"id": "d6fd50542258", "xPct": 42.7, "yPct": 31.1, "color": "#E84393", "size": "L", "po": "1N10161.090.09", "jobName": "Northgate Business Park", "notes": "Conference Table", "status": "active", "createdAt": 1783312968908}, {"id": "36c65a27f431", "xPct": 35.2, "yPct": 9.8, "color": "#2E8B57", "size": "L", "po": "1N10336.001.09", "jobName": "Garcia Construction", "notes": "Table Base", "status": "active", "createdAt": 1784145681638}]}, "41fc1a1c6c48": {"id": "41fc1a1c6c48", "wallId": "1019f8c30586", "dataUrl": "__RACK_PLACEHOLDER__", "division": "C", "sectionNum": 3, "label": "", "markers": [{"id": "f790484a24c4", "xPct": 58.0, "yPct": 86.8, "color": "#E8590C", "size": "M", "po": "1N10049.098.03", "jobName": "Sandia Office Solutions", "notes": "Sit-Stand Desk", "status": "active", "createdAt": 1781005887618}, {"id": "c791774e45fa", "xPct": 21.0, "yPct": 32.8, "color": "#E8590C", "size": "S", "po": "1N10049.098.03", "jobName": "Sandia Office Solutions", "notes": "Sit-Stand Desk", "status": "active", "createdAt": 1781005887618}, {"id": "7f9b16263f75", "xPct": 89.2, "yPct": 26.1, "color": "#D64545", "size": "M", "po": "1N10098.030.04", "jobName": "Martinez Installs", "notes": "Cubicle Panel", "status": "active", "createdAt": 1785272015927}, {"id": "2015037f3402", "xPct": 60.6, "yPct": 28.9, "color": "#E84393", "size": "L", "po": "1N10427.082.05", "jobName": "Bernalillo County Admin", "notes": "OLD STOCK - flagged 2025 inventory, verify still needed; Task Chair", "status": "active", "createdAt": 1780747250997}, {"id": "d3faf9bd28f9", "xPct": 63.6, "yPct": 28.9, "color": "#8E44AD", "size": "M", "po": "1N10448.008.04", "jobName": "Johnson Remodel", "notes": "Reception Desk", "status": "completed", "createdAt": 1781573211063}, {"id": "87712f2bf402", "xPct": 8.5, "yPct": 47.2, "color": "#F4B400", "size": "S", "po": "1N10504.026.01", "jobName": "Titan Development", "notes": "Lateral File", "status": "active", "createdAt": 1777581074322}]}, "b7fffd5b3d8f": {"id": "b7fffd5b3d8f", "wallId": "1019f8c30586", "dataUrl": "__RACK_PLACEHOLDER__", "division": "C", "sectionNum": 4, "label": "", "markers": [{"id": "084855251bf8", "xPct": 81.3, "yPct": 12.4, "color": "#E8590C", "size": "M", "po": "1N10049.098.03", "jobName": "Sandia Office Solutions", "notes": "Sit-Stand Desk", "status": "active", "createdAt": 1781005887618}, {"id": "e937dfc10476", "xPct": 20.6, "yPct": 87.0, "color": "#2F80ED", "size": "L", "po": "", "jobName": "Garcia Construction", "notes": "Table Base", "status": "completed", "createdAt": 1782942680748}, {"id": "00aad8a9b990", "xPct": 80.4, "yPct": 34.8, "color": "#D64545", "size": "M", "po": "1N10098.030.04", "jobName": "Martinez Installs", "notes": "Bookcase", "status": "active", "createdAt": 1785272015927}, {"id": "c3957648ee72", "xPct": 8.1, "yPct": 85.1, "color": "#2E8B57", "size": "S", "po": "", "jobName": "Garcia Construction", "notes": "OVERFLOW - not in assigned bay, check floor near dock; Cubicle Panel", "status": "active", "createdAt": 1784145681638}, {"id": "6e5c218aba03", "xPct": 8.4, "yPct": 31.0, "color": "#E84393", "size": "S", "po": "1N10427.082.05", "jobName": "Bernalillo County Admin", "notes": "Task Chair", "status": "active", "createdAt": 1780747250997}, {"id": "7fb290c84d08", "xPct": 13.3, "yPct": 63.0, "color": "#8E44AD", "size": "S", "po": "1N10448.008.04", "jobName": "Johns
